@@ -1,5 +1,10 @@
 -- main.lua
 
+-- Configuration: Set to true to use migrated states
+local USE_NEW_MAIN_MENU = true  -- MainMenuState migrated
+local USE_NEW_NEWRUN = false     -- Not yet migrated
+local USE_NEW_GAMEPLAY = false   -- Not yet migrated
+
 function love.load()
     -- Ensure src directory is in package.path for require
     package.path = package.path .. ";./src/?.lua;./?.lua"
@@ -9,14 +14,14 @@ function love.load()
     end
 
     print("\n========================================")
-    print("//ROGUE_PROCESS - Phase 1 Initialization")
+    print("//ROGUE_PROCESS - Phase 2 Initialization")
     print("========================================\n")
 
-    -- ===== EXISTING GLOBAL SYSTEMS (Legacy) =====
+    -- ===== EXISTING GLOBAL SYSTEMS (Legacy - Still needed) =====
     print("[Legacy] Loading existing global systems...")
-
+    
     _G.Config = require "src.config"
-    _G.GameState = require "src.states.GameState"
+    _G.GameState = require "src.states.GameState"  -- Keep for non-migrated states
     _G.CompositeShader = nil
     _G.MainSceneCanvas = nil
     _G.SpriteManager = require 'src.core.managers.SpriteManager'
@@ -27,85 +32,105 @@ function love.load()
 
     -- Load Fonts (Legacy)
     _G.Fonts = {
-        small = love.graphics.newFont(Config.fontPath, Config.fontSize.small),
-        medium = love.graphics.newFont(Config.fontPath, Config.fontSize.medium),
-        large = love.graphics.newFont(Config.fontPath, Config.fontSize.large),
-        title = love.graphics.newFont(Config.fontPath, Config.fontSize.title),
+        small = love.graphics.newFont(_G.Config.fontPath, _G.Config.fontSize.small),
+        medium = love.graphics.newFont(_G.Config.fontPath, _G.Config.fontSize.medium),
+        large = love.graphics.newFont(_G.Config.fontPath, _G.Config.fontSize.large),
+        title = love.graphics.newFont(_G.Config.fontPath, _G.Config.fontSize.title),
     }
     love.graphics.setFont(_G.Fonts.medium)
 
     -- Load SpriteManager (Legacy)
-    SpriteManager.load()
+    _G.SpriteManager.load()
 
     -- Load shader (Legacy)
     local success, shader_module = pcall(require, "src.utils.compositeScanlines")
     if success and shader_module then
         _G.CompositeShader = shader_module
-        print("Composite Scanlines shader loaded.")
+        print("[Legacy] Composite Scanlines shader loaded.")
     else
-        print("ERROR loading composite scanlines shader: " .. tostring(shader_module))
+        print("[Legacy] Composite scanlines shader not loaded")
         _G.CompositeShader = nil
     end
 
     -- Create main canvas (Legacy)
-    _G.MainSceneCanvas = love.graphics.newCanvas(Config.nativeResolution.width, Config.nativeResolution.height)
+    _G.MainSceneCanvas = love.graphics.newCanvas(_G.Config.nativeResolution.width, _G.Config.nativeResolution.height)
     if _G.MainSceneCanvas then
         _G.MainSceneCanvas:setFilter("nearest", "nearest")
         if _G.CompositeShader then
-            _G.CompositeShader:send("screen", {Config.nativeResolution.width, Config.nativeResolution.height})
+            _G.CompositeShader:send("screen", {_G.Config.nativeResolution.width, _G.Config.nativeResolution.height})
         end
     end
 
     love.graphics.setDefaultFilter("nearest", "nearest")
+    
+    print("[Legacy] Legacy systems initialized\n")
 
-    -- Register states (Legacy)
-    local MainMenuState = require "src.states.MainMenuState"
-    local GameplayState = require "src.states.GameplayState"
+    -- ===== NEW GAME SINGLETON (Phase 2) =====
+    print("[Phase 2] Initializing new Game singleton...")
+    
+    local Game = require "src.core.Game"
+    _G.Game = Game:new(_G.Config)
+    _G.Game:initialize()
+    
+    -- Optional: Enable debug mode
+    -- _G.Game:setDebugMode(true)
+    
+    print("[Phase 2] Game singleton initialized")
+    
+    -- ===== STATE REGISTRATION (Phase 2) =====
+    print("\n[Phase 2] Registering states...")
+    
+    -- Load state classes
+    local MainMenuState_Legacy = require "src.states.MainMenuState"
     local NewRunState = require 'src.states.NewRunState'
+    local GameplayState = require "src.states.GameplayState"
     local SubroutineChoiceState = require "src.states.SubroutineChoiceState"
     local CoreModificationState = require 'src.states.CoreModificationState'
+    
+    -- Register with legacy GameState (for non-migrated states)
+    print("[Phase 2] Registering with legacy GameState...")
+    
+    if USE_NEW_MAIN_MENU then
+        -- Use migrated MainMenuState with legacy system (temporary bridge)
+        -- This lets migrated state work with old system during transition
+        print("  - mainmenu: MIGRATED version (via legacy bridge)")
+        _G.GameState.register("mainmenu", MainMenuState_Legacy:new(_G.Game))
+    else
+        print("  - mainmenu: Legacy version")
+        _G.GameState.register("mainmenu", MainMenuState_Legacy:new())
+    end
+    
+    _G.GameState.register("newrun", NewRunState:new())
+    _G.GameState.register("gameplay", GameplayState:new())
+    _G.GameState.register("subroutine_choice", SubroutineChoiceState:new())
+    _G.GameState.register("core_modification", CoreModificationState:new())
+    
+    -- Also register with new StateManager (for future use)
+    print("\n[Phase 2] Registering with new StateManager...")
+    if USE_NEW_MAIN_MENU then
+        print("  - mainmenu: MIGRATED version")
+        _G.Game.states:registerState("mainmenu", MainMenuState_Legacy)
+    end
+    -- Other states will be registered as they're migrated
+    
+    -- Start with main menu
+    print("\n[Phase 2] Starting main menu...")
+    _G.GameState.switch("mainmenu")
 
-    GameState.register("mainmenu", MainMenuState:new())
-    GameState.register("newrun", NewRunState:new())
-    GameState.register("gameplay", GameplayState:new())
-    GameState.register("subroutine_choice", SubroutineChoiceState:new())
-    GameState.register("core_modification", CoreModificationState:new())
-
-    -- Start with main menu (Legacy)
-    GameState.switch("mainmenu")
-
-    love.window.setTitle(Config.windowTitle or "//ROGUE_PROCESS")
-    love.graphics.setBackgroundColor(Config.activeColors.background)
+    love.window.setTitle(_G.Config.windowTitle or "//ROGUE_PROCESS")
+    love.graphics.setBackgroundColor(_G.Config.activeColors.background)
 
     -- Seed RNG
     love.math.setRandomSeed(os.time())
-
-    print("[Legacy] Legacy systems initialized\n")
-
-    -- ===== NEW GAME SINGLETON (Phase 1) =====
-    print("[Phase 1] Initializing new Game singleton...")
-
-    local Game = require('src.core.game')
-    _G.Game = Game:new(_G.Config)
-    _G.Game:initialize()
-
-    -- Enable debug mode for Phase 1 testing
-    _G.Game:setDebugMode(true)
-
-    print("[Phase 1] New Game singleton initialized")
-    print("[Phase 1] ServiceLocator available with services:")
-    local ServiceLocator = require "src.core.service_locator"
-    local services = ServiceLocator.getAllServiceNames()
-    for _, serviceName in ipairs(services) do
-        print("  - " .. serviceName)
-    end
     
-    print("\n[Phase 1] Both systems running in parallel")
-    print("  Legacy: _G.GameState (active)")
-    print("  New:    _G.Game (initialized, ready)\n")
+    print("\n[Phase 2] Migration Status:")
+    print("  MainMenuState: " .. (USE_NEW_MAIN_MENU and "✓ MIGRATED" or "○ Legacy"))
+    print("  NewRunState: " .. (USE_NEW_NEWRUN and "✓ MIGRATED" or "○ Legacy"))
+    print("  GameplayState: " .. (USE_NEW_GAMEPLAY and "✓ MIGRATED" or "○ Legacy"))
+    print("  Other States: ○ Legacy")
     
-    print("========================================")
-    print("Phase 1 Initialization Complete")
+    print("\n========================================")
+    print("Phase 2 Initialization Complete")
     print("========================================\n")
 end
 

@@ -1,14 +1,26 @@
--- src/states/MainMenuState.lua
-local GameState = require "src.states.GameState"
+-- src/states/MainMenuState.lua (Phase 2 - Migrated Version)
+-- This version uses the new architecture: BaseState, ServiceLocator, Events
+local BaseState = require "src.core.base_state"
 local UIHelpers = require "src.ui.ui_helpers"
 
 local MainMenuState = {}
 MainMenuState.__index = MainMenuState
+setmetatable(MainMenuState, {__index = BaseState})
 
-function MainMenuState:new()
-    local instance = setmetatable({}, MainMenuState)
+-- Constructor
+function MainMenuState:new(game)
+    -- Call BaseState constructor
+    local instance = BaseState.new(self, game)
+    setmetatable(instance, MainMenuState)
+    
+    -- State name for debugging
+    instance.name = "MainMenuState"
+    
+    -- Menu options
     instance.options = {"Start New Run", "Load Save (NYI)", "Settings (NYI)", "Exit Game"}
     instance.selectedOption = 1
+    
+    -- Visual elements
     instance.title = "//ROGUE_PROCESS"
     instance.subtitle = "Neural Network Intrusion Simulator"
     instance.animationTime = 0
@@ -16,148 +28,283 @@ function MainMenuState:new()
     instance.backgroundParticles = {}
     
     -- Initialize background particles
+    instance:initializeParticles()
+    
+    return instance
+end
+
+-- Initialize visual effects
+function MainMenuState:initializeParticles()
+    local nativeW = self.config.nativeResolution.width
+    local nativeH = self.config.nativeResolution.height
+    
     for i = 1, 20 do
-        table.insert(instance.backgroundParticles, {
-            x = love.math.random(0, _G.Config.nativeResolution.width),
-            y = love.math.random(0, _G.Config.nativeResolution.height),
+        table.insert(self.backgroundParticles, {
+            x = love.math.random(0, nativeW),
+            y = love.math.random(0, nativeH),
             vx = love.math.random(-20, 20),
             vy = love.math.random(-20, 20),
             alpha = love.math.random(0.1, 0.3),
             size = love.math.random(1, 3)
         })
     end
+end
+
+-- State lifecycle: Enter
+function MainMenuState:enter(...)
+    BaseState.enter(self, ...)
     
-    return instance
-end
-
-function MainMenuState:enter()
-    print("Entered Enhanced MainMenuState")
+    print("[MainMenuState] Entered (Phase 2 version)")
+    
+    -- Reset animation
     self.animationTime = 0
-    love.graphics.setBackgroundColor(_G.Config.activeColors.background)
+    
+    -- Set background color
+    love.graphics.setBackgroundColor(self.config.activeColors.background)
+    
+    -- Emit event
+    if self.events then
+        self.events:emit("menu_opened", {state = "main_menu"})
+    end
+    
+    -- Play menu music or sound (if implemented)
+    if _G.SFX then
+        _G.SFX.play("menu_ambient")
+    end
 end
 
+-- State lifecycle: Leave
+function MainMenuState:leave()
+    print("[MainMenuState] Left")
+    
+    -- Emit event
+    if self.events then
+        self.events:emit("menu_closed", {state = "main_menu"})
+    end
+    
+    BaseState.leave(self)
+end
+
+-- Update logic
 function MainMenuState:update(dt)
+    BaseState.update(self, dt)
+    
+    if self.paused then return end
+    
+    -- Update animations
     self.animationTime = self.animationTime + dt
     self.logoGlitch = self.logoGlitch + dt * 10
     
     -- Update background particles
+    local nativeW = self.config.nativeResolution.width
+    local nativeH = self.config.nativeResolution.height
+    
     for _, particle in ipairs(self.backgroundParticles) do
         particle.x = particle.x + particle.vx * dt
         particle.y = particle.y + particle.vy * dt
         
         -- Wrap around screen
-        if particle.x < 0 then particle.x = _G.Config.nativeResolution.width end
-        if particle.x > _G.Config.nativeResolution.width then particle.x = 0 end
-        if particle.y < 0 then particle.y = _G.Config.nativeResolution.height end
-        if particle.y > _G.Config.nativeResolution.height then particle.y = 0 end
-        
-        particle.alpha = 0.1 + 0.2 * math.sin(self.animationTime * 2 + particle.x * 0.01)
+        if particle.x < 0 then particle.x = nativeW end
+        if particle.x > nativeW then particle.x = 0 end
+        if particle.y < 0 then particle.y = nativeH end
+        if particle.y > nativeH then particle.y = 0 end
     end
 end
 
+-- Draw logic
 function MainMenuState:draw()
-    local nativeW, nativeH = _G.Config.nativeResolution.width, _G.Config.nativeResolution.height
+    if not self.visible then return end
     
-    -- Animated background
-    love.graphics.setColor(_G.Config.activeColors.background)
-    love.graphics.rectangle("fill", 0, 0, nativeW, nativeH)
+    BaseState.draw(self)
+    
+    -- Get resources
+    local fonts = self.resources:getFonts()
+    local nativeW = self.config.nativeResolution.width
+    local nativeH = self.config.nativeResolution.height
     
     -- Draw background particles
-    for _, particle in ipairs(self.backgroundParticles) do
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], particle.alpha)
-        love.graphics.circle("fill", particle.x, particle.y, particle.size)
-    end
+    self:drawBackgroundParticles()
     
-    -- Grid overlay effect
-    love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                          _G.Config.activeColors.accent[3], 0.1)
-    local gridSize = 40
-    for x = 0, nativeW, gridSize do
-        love.graphics.line(x, 0, x, nativeH)
-    end
-    for y = 0, nativeH, gridSize do
-        love.graphics.line(0, y, nativeW, y)
-    end
+    -- Draw title with glitch effect
+    self:drawTitle(fonts, nativeW, nativeH)
     
-    -- Main title with glitch effect
-    local titleY = nativeH / 4
-    local glitchOffset = math.sin(self.logoGlitch) * 2
+    -- Draw menu options
+    self:drawMenuOptions(fonts, nativeW, nativeH)
     
-    -- Glitch layers
-    love.graphics.setFont(_G.Fonts.title)
-    love.graphics.setColor(1, 0.2, 0.2, 0.3)
-    love.graphics.printf(self.title, glitchOffset - 2, titleY - 1, nativeW, "center")
-    love.graphics.setColor(0.2, 1, 0.2, 0.3)
-    love.graphics.printf(self.title, glitchOffset + 1, titleY + 1, nativeW, "center")
+    -- Draw version text
+    self:drawVersionInfo(fonts, nativeW, nativeH)
     
-    -- Main title
-    UIHelpers.drawTextWithGlow(self.title, nativeW/2, titleY + _G.Fonts.title:getHeight()/2, 
-                               _G.Fonts.title, _G.Config.activeColors.accent, "center")
-    
-    -- Subtitle
-    love.graphics.setFont(_G.Fonts.medium)
-    love.graphics.setColor(_G.Config.activeColors.ui_text_dim)
-    love.graphics.printf(self.subtitle, 0, titleY + _G.Fonts.title:getHeight() + 10, nativeW, "center")
-    
-    -- Menu options with modern styling
-    local optionStartY = nativeH / 2 + 20
-    local optionHeight = 40
-    local optionWidth = 300
-    local optionX = (nativeW - optionWidth) / 2
-
-    for i, option in ipairs(self.options) do
-        local optionY = optionStartY + (i - 1) * (optionHeight + 10)
-        local isSelected = (i == self.selectedOption)
-        local isPressed = false -- You could add this for mouse interactions
-        
-        UIHelpers.drawButton(optionX, optionY, optionWidth, optionHeight, option, 
-                           isSelected, isPressed, self.animationTime)
-    end
-    
-    -- Version info and controls
-    love.graphics.setFont(_G.Fonts.small)
-    love.graphics.setColor(_G.Config.activeColors.ui_text_dim)
-    local versionText = "Use UP/DOWN arrows and ENTER | Built with LÖVE " .. love.getVersion()
-    love.graphics.printf(versionText, 0, nativeH - _G.Fonts.small:getHeight() - 10, nativeW, "center")
-    
-    -- System info panel
-    local infoPanelW, infoPanelH = 200, 80
-    local infoPanelX, infoPanelY = nativeW - infoPanelW - 20, 20
-    UIHelpers.drawPanel(infoPanelX, infoPanelY, infoPanelW, infoPanelH, "SYS_INFO", "compact")
-    
-    love.graphics.setFont(_G.Fonts.small)
-    love.graphics.setColor(_G.Config.activeColors.ui_text_default)
-    love.graphics.print("NEURAL_NET: ONLINE", infoPanelX + 10, infoPanelY + 25)
-    love.graphics.print("CORES: " .. (_G.MetaProgress and #_G.MetaProgress.data.unlockedAICoreIds or 1), 
-                       infoPanelX + 10, infoPanelY + 40)
-    love.graphics.print("STATUS: READY", infoPanelX + 10, infoPanelY + 55)
+    -- Draw system info panel
+    self:drawSystemInfo(fonts, nativeW, nativeH)
 end
 
-function MainMenuState:keypressed(key)
-    if key == "up" then
-        self.selectedOption = math.max(1, self.selectedOption - 1)
-        _G.SFX.play("ui_navigate")
-    elseif key == "down" then
-        self.selectedOption = math.min(#self.options, self.selectedOption + 1)
-        _G.SFX.play("ui_navigate")
-    elseif key == "return" or key == "kpenter" then
-        local selected = self.options[self.selectedOption]
-        _G.SFX.play("ui_select")
+-- Draw background particles
+function MainMenuState:drawBackgroundParticles()
+    love.graphics.setColor(self.config.activeColors.accent[1], 
+                          self.config.activeColors.accent[2], 
+                          self.config.activeColors.accent[3], 0.3)
+    
+    for _, particle in ipairs(self.backgroundParticles) do
+        love.graphics.setColor(self.config.activeColors.accent[1], 
+                              self.config.activeColors.accent[2], 
+                              self.config.activeColors.accent[3], 
+                              particle.alpha)
+        love.graphics.circle("fill", particle.x, particle.y, particle.size)
+    end
+end
+
+-- Draw title with glitch effect
+function MainMenuState:drawTitle(fonts, nativeW, nativeH)
+    love.graphics.setFont(fonts.title)
+    
+    -- Glitch effect
+    local glitchOffset = 0
+    if math.sin(self.logoGlitch) > 0.9 then
+        glitchOffset = love.math.random(-3, 3)
+    end
+    
+    -- Shadow/glitch layer
+    love.graphics.setColor(self.config.activeColors.highlight[1] * 0.5,
+                          self.config.activeColors.highlight[2] * 0.5,
+                          self.config.activeColors.highlight[3] * 0.5, 0.5)
+    love.graphics.printf(self.title, glitchOffset - 2, 60 + glitchOffset, nativeW, "center")
+    
+    -- Main title
+    love.graphics.setColor(self.config.activeColors.highlight)
+    love.graphics.printf(self.title, 0, 60, nativeW, "center")
+    
+    -- Subtitle
+    love.graphics.setFont(fonts.small)
+    love.graphics.setColor(self.config.activeColors.text)
+    love.graphics.printf(self.subtitle, 0, 95, nativeW, "center")
+end
+
+-- Draw menu options
+function MainMenuState:drawMenuOptions(fonts, nativeW, nativeH)
+    local menuY = nativeH / 2 - 20
+    local itemHeight = 30
+    
+    love.graphics.setFont(fonts.medium)
+    
+    for i, option in ipairs(self.options) do
+        local yPos = menuY + (i - 1) * itemHeight
+        local isSelected = (i == self.selectedOption)
         
-        if selected == "Start New Run" then
-            GameState.switch("newrun")
-        elseif selected == "Exit Game" then
-            love.event.quit()
+        if isSelected then
+            -- Selection highlight with pulse
+            local pulse = 0.7 + 0.3 * math.sin(self.animationTime * 3)
+            love.graphics.setColor(self.config.activeColors.highlight[1] * pulse,
+                                  self.config.activeColors.highlight[2] * pulse,
+                                  self.config.activeColors.highlight[3] * pulse, 0.3)
+            
+            local boxW = fonts.medium:getWidth(option) + 20
+            local boxX = (nativeW - boxW) / 2
+            love.graphics.rectangle("fill", boxX, yPos - 3, boxW, itemHeight - 10)
+            
+            -- Selected text
+            love.graphics.setColor(self.config.activeColors.highlight)
+            love.graphics.printf("> " .. option .. " <", 0, yPos, nativeW, "center")
         else
-            print(selected .. " selected (Not Yet Implemented)")
-            _G.SFX.play("ui_error")
+            -- Unselected text
+            love.graphics.setColor(self.config.activeColors.ui_text_default)
+            love.graphics.printf(option, 0, yPos, nativeW, "center")
         end
     end
 end
 
-function MainMenuState:leave()
-    print("Left Enhanced MainMenuState")
+-- Draw version info
+function MainMenuState:drawVersionInfo(fonts, nativeW, nativeH)
+    love.graphics.setFont(fonts.small)
+    love.graphics.setColor(self.config.activeColors.ui_text_default[1],
+                          self.config.activeColors.ui_text_default[2],
+                          self.config.activeColors.ui_text_default[3], 0.5)
+    
+    local versionText = "v0.1.0-alpha | Phase 2 Architecture"
+    love.graphics.printf(versionText, 0, nativeH - fonts.small:getHeight() - 10, nativeW, "center")
+end
+
+-- Draw system info panel
+function MainMenuState:drawSystemInfo(fonts, nativeW, nativeH)
+    local infoPanelW, infoPanelH = 200, 80
+    local infoPanelX, infoPanelY = nativeW - infoPanelW - 20, 20
+    
+    UIHelpers.drawPanel(infoPanelX, infoPanelY, infoPanelW, infoPanelH, "SYS_INFO", "compact")
+    
+    love.graphics.setFont(fonts.small)
+    love.graphics.setColor(self.config.activeColors.ui_text_default)
+    
+    love.graphics.print("NEURAL_NET: ONLINE", infoPanelX + 10, infoPanelY + 25)
+    
+    -- Get unlocked cores count from MetaProgress
+    local coreCount = 1
+    if _G.MetaProgress and _G.MetaProgress.data and _G.MetaProgress.data.unlockedAICoreIds then
+        coreCount = 0
+        for _ in pairs(_G.MetaProgress.data.unlockedAICoreIds) do
+            coreCount = coreCount + 1
+        end
+    end
+    love.graphics.print("CORES: " .. coreCount, infoPanelX + 10, infoPanelY + 40)
+    love.graphics.print("STATUS: READY", infoPanelX + 10, infoPanelY + 55)
+end
+
+-- Handle keyboard input
+function MainMenuState:keypressed(key, scancode, isRepeat)
+    if key == "up" then
+        self.selectedOption = math.max(1, self.selectedOption - 1)
+        if _G.SFX then _G.SFX.play("ui_navigate") end
+        return true
+        
+    elseif key == "down" then
+        self.selectedOption = math.min(#self.options, self.selectedOption + 1)
+        if _G.SFX then _G.SFX.play("ui_navigate") end
+        return true
+        
+    elseif key == "return" or key == "kpenter" then
+        local selected = self.options[self.selectedOption]
+        if _G.SFX then _G.SFX.play("ui_select") end
+        
+        self:handleMenuSelection(selected)
+        return true
+    end
+    
+    return false
+end
+
+-- Handle menu selection
+function MainMenuState:handleMenuSelection(selected)
+    if selected == "Start New Run" then
+        -- Emit event before transition
+        if self.events then
+            self.events:emit("menu_option_selected", {option = "new_run"})
+        end
+        
+        -- Transition to new run state
+        -- For Phase 2, we'll use legacy GameState for states not yet migrated
+        if _G.GameState then
+            _G.GameState.switch("newrun")
+        else
+            -- Future: use new StateManager when all states migrated
+            self.stateManager:switch("newrun")
+        end
+        
+    elseif selected == "Exit Game" then
+        -- Emit exit event
+        if self.events then
+            self.events:emit("menu_option_selected", {option = "exit"})
+            self.events:emit("game_exit_requested", {})
+        end
+        
+        love.event.quit()
+        
+    else
+        -- Not yet implemented
+        print(selected .. " selected (Not Yet Implemented)")
+        if _G.SFX then _G.SFX.play("ui_error") end
+        
+        if self.events then
+            self.events:emit("menu_option_selected", {option = selected, implemented = false})
+        end
+    end
 end
 
 return MainMenuState

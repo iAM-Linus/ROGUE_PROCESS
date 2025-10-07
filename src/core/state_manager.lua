@@ -1,5 +1,6 @@
 -- src/core/state_manager.lua
 -- State manager with state stack support for overlays/modals
+---@class StateManager
 local StateManager = {}
 StateManager.__index = StateManager
 
@@ -23,7 +24,7 @@ end
 --- Register a state class
 ---@param name string : State identifier
 ---@param stateClass table : State class (not instance)
-function StateManager:register_state(name, stateClass)
+function StateManager:registerState(name, stateClass)
     assert(type(name) == "string", "State name must be a string")
     assert(type(stateClass) == "table", "State class must be a table")
 
@@ -37,6 +38,9 @@ function StateManager:register_state(name, stateClass)
         print(string.format("[StateManager] Registered state: %s", name))
     end
 end
+
+-- Alias for compatibility (underscore version)
+StateManager.register_state = StateManager.registerState
 
 --- Swtich to a new state (replaces current state)
 ---@param name string : State identifier

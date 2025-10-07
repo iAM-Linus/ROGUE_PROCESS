@@ -1,5 +1,6 @@
 -- src/core/base_state.lua
 -- Base class for all game states with standardized lifecycle
+---@class BaseState
 local BaseState = {}
 BaseState.__index = BaseState
 
