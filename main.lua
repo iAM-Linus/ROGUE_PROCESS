@@ -1,3 +1,5 @@
+-- main.lua
+
 function love.load()
     -- Ensure src directory is in package.path for require
     package.path = package.path .. ";./src/?.lua;./?.lua"
@@ -5,6 +7,13 @@ function love.load()
         package.path = package.path .. ";" .. love.filesystem.getSourceBaseDirectory() .. "/src/?.lua"
         package.path = package.path .. ";" .. love.filesystem.getSourceBaseDirectory() .. "/?.lua"
     end
+
+    print("\n========================================")
+    print("//ROGUE_PROCESS - Phase 1 Initialization")
+    print("========================================\n")
+
+    -- ===== EXISTING GLOBAL SYSTEMS (Legacy) =====
+    print("[Legacy] Loading existing global systems...")
 
     _G.Config = require "src.config"
     _G.GameState = require "src.states.GameState"
@@ -14,10 +23,9 @@ function love.load()
     _G.SFX = require 'src.utils.SFX'
     _G.MetaProgress = require "src.core.MetaProgress"
     _G.MetaProgress:load()
-
     _G.SelectedAICoreId = _G.MetaProgress:getSelectedAICoreId()
 
-    -- Load Fonts
+    -- Load Fonts (Legacy)
     _G.Fonts = {
         small = love.graphics.newFont(Config.fontPath, Config.fontSize.small),
         medium = love.graphics.newFont(Config.fontPath, Config.fontSize.medium),
@@ -26,9 +34,10 @@ function love.load()
     }
     love.graphics.setFont(_G.Fonts.medium)
 
+    -- Load SpriteManager (Legacy)
     SpriteManager.load()
 
-    -- Load the shader
+    -- Load shader (Legacy)
     local success, shader_module = pcall(require, "src.utils.compositeScanlines")
     if success and shader_module then
         _G.CompositeShader = shader_module
@@ -38,7 +47,7 @@ function love.load()
         _G.CompositeShader = nil
     end
 
-    -- Create the main canvas AT NATIVE RESOLUTION
+    -- Create main canvas (Legacy)
     _G.MainSceneCanvas = love.graphics.newCanvas(Config.nativeResolution.width, Config.nativeResolution.height)
     if _G.MainSceneCanvas then
         _G.MainSceneCanvas:setFilter("nearest", "nearest")
@@ -49,7 +58,7 @@ function love.load()
 
     love.graphics.setDefaultFilter("nearest", "nearest")
 
-    -- Initialize and register states
+    -- Register states (Legacy)
     local MainMenuState = require "src.states.MainMenuState"
     local GameplayState = require "src.states.GameplayState"
     local NewRunState = require 'src.states.NewRunState'
@@ -62,7 +71,7 @@ function love.load()
     GameState.register("subroutine_choice", SubroutineChoiceState:new())
     GameState.register("core_modification", CoreModificationState:new())
 
-    -- Start with the main menu
+    -- Start with main menu (Legacy)
     GameState.switch("mainmenu")
 
     love.window.setTitle(Config.windowTitle or "//ROGUE_PROCESS")
@@ -70,10 +79,44 @@ function love.load()
 
     -- Seed RNG
     love.math.setRandomSeed(os.time())
+
+    print("[Legacy] Legacy systems initialized\n")
+
+    -- ===== NEW GAME SINGLETON (Phase 1) =====
+    print("[Phase 1] Initializing new Game singleton...")
+
+    local Game = require('src.core.game')
+    _G.Game = Game:new(_G.Config)
+    _G.Game:initialize()
+
+    -- Enable debug mode for Phase 1 testing
+    _G.Game:setDebugMode(true)
+
+    print("[Phase 1] New Game singleton initialized")
+    print("[Phase 1] ServiceLocator available with services:")
+    local ServiceLocator = require "src.core.service_locator"
+    local services = ServiceLocator.getAllServiceNames()
+    for _, serviceName in ipairs(services) do
+        print("  - " .. serviceName)
+    end
+    
+    print("\n[Phase 1] Both systems running in parallel")
+    print("  Legacy: _G.GameState (active)")
+    print("  New:    _G.Game (initialized, ready)\n")
+    
+    print("========================================")
+    print("Phase 1 Initialization Complete")
+    print("========================================\n")
 end
 
 function love.update(dt)
-    GameState.update(dt)
+    -- Update legacy system (currently active)
+    _G.GameState.update(dt)
+    
+    -- Update new system (ready for use)
+    if _G.Game then
+        _G.Game:update(dt)
+    end
 end
 
 function love.draw()
@@ -136,45 +179,76 @@ function love.draw()
     end
 end
 
-function love.keypressed(key, scancode, isrepeat)
-    local handled_by_state = GameState.keypressed(key, scancode, isrepeat)
-    
-    if not handled_by_state and key == 'escape' then
-        local current_state_object = GameState.current()
-        local main_menu_object = GameState.get("mainmenu")
+--function love.keypressed(key, scancode, isrepeat)
+--    local handled_by_state = GameState.keypressed(key, scancode, isrepeat)
+--    
+--    if not handled_by_state and key == 'escape' then
+--        local current_state_object = GameState.current()
+--        local main_menu_object = GameState.get("mainmenu")
+--
+--        if current_state_object ~= main_menu_object then
+--            print("Global Escape pressed, switching to Main Menu.")
+--            local gameplay = GameState.get("gameplay")
+--            if gameplay then gameplay.isInitialized = false end
+--            GameState.switch("mainmenu")
+--        end
+--    end
+--end
 
-        if current_state_object ~= main_menu_object then
-            print("Global Escape pressed, switching to Main Menu.")
-            local gameplay = GameState.get("gameplay")
-            if gameplay then gameplay.isInitialized = false end
-            GameState.switch("mainmenu")
-        end
+function love.keypressed(key, scancode, isrepeat)
+    -- Handle input through legacy system (currently active)
+    local handled = _G.GameState.keypressed(key, scancode, isrepeat)
+    
+    -- Also pass to new system (for debug shortcuts, etc.)
+    if _G.Game and not handled then
+        handled = _G.Game:handleInput(key, scancode, isrepeat)
     end
+    
+    return handled
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-    GameState.mousepressed(x, y, button, istouch, presses)
+    -- Legacy system
+    _G.GameState.mousepressed(x, y, button, istouch, presses)
+    
+    -- New system
+    if _G.Game then
+        _G.Game:mousepressed(x, y, button, istouch, presses)
+    end
 end
 
 function love.mousemoved(x, y, dx, dy, istouch)
-    GameState.mousemoved(x, y, dx, dy, istouch)
+    -- Legacy system
+    _G.GameState.mousemoved(x, y, dx, dy, istouch)
+    
+    -- New system
+    if _G.Game then
+        _G.Game:mousemoved(x, y, dx, dy, istouch)
+    end
 end
 
 function love.resize(w, h)
-    if w == 0 or h == 0 then return end
-
-    -- MainSceneCanvas size doesn't change, only the scaling changes
-    if _G.CompositeShader then
-        -- The shader's screen uniform stays the same (canvas size)
-        -- but you could send new screen dimensions if needed for other effects
+    -- Legacy system
+    _G.GameState.resize(w, h)
+    
+    -- New system
+    if _G.Game then
+        _G.Game:resize(w, h)
     end
-
-    if GameState then GameState.resize(w, h) end
 end
 
 function love.quit()
-    print("Shutting down //ROGUE_PROCESS. Goodbye!")
+    print("\n[Shutdown] Cleaning up...")
+    
+    -- Shutdown new system
+    if _G.Game then
+        _G.Game:shutdown()
+    end
+    
+    -- Save legacy meta progress
     if _G.MetaProgress then
         _G.MetaProgress:save()
     end
+    
+    print("[Shutdown] Complete\n")
 end
