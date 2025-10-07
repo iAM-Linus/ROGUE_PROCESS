@@ -1,3 +1,4 @@
+---@diagnostic disable: need-check-nil
 -- src/core/managers/HUDManager.lua - Modernized version
 local Helpers = require 'src.utils.Helpers'
 local UIHelpers = require "src.ui.ui_helpers"
@@ -378,7 +379,7 @@ function HUDManager:drawInspectionPanel(map, currentMode, lookCursor, targetCurs
             currentLine = currentLine + 1
             
             for _, effect in ipairs(entityToInspect.activeStatusEffects) do
-                local effectText = (effect.name or effect.id) .. " (" .. effect.duration .. ")"
+                local effectText = (effect.name or effect.id or "Unknown") .. (effect.duration and " (" .. tostring(effect.duration) .. ")" or "")
                 love.graphics.setColor(_G.Config.activeColors.ui_text_default)
                 love.graphics.print("• " .. effectText, contentX + 8, contentY + currentLine * lineHeight)
                 currentLine = currentLine + 1
