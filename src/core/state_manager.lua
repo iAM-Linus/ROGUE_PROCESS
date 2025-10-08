@@ -143,7 +143,7 @@ end
 
 --- Pop the current state and return to previous
 function StateManager:pop()
-    if #self.state_stack == 0 then
+    if #self.stateStack == 0 then
         print("[StateManager] WARNING: Cannot pop, state stack is empty")
         return
     end

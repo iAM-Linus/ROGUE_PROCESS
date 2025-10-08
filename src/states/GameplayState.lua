@@ -247,45 +247,57 @@ function GameplayState:moveToNextLevel()
 end
 
 function GameplayState:resume()
+    BaseState.resume(self)  -- Call base implementation
+    
     print("GameplayState:resume() called.")
-    self.currentMode = GameplayState.Mode.PLAYER_TURN
+    
+    -- Reset to player turn
+    self.currentMode = GameplayState.Mode.PLAYER_TURN 
     self.targetCursor.visible = false
     self.targetingSubroutine = nil
     self.isEnemyActionResolving = false
 
+    -- Handle boss reward flow
     if self.pendingBossReward_SubroutineChoice then
         print("Resuming after boss reward subroutine choice. Moving to next level.")
         self.pendingBossReward_SubroutineChoice = false
-        -- isNextFloorBoss should have been determined by floor progression logic before boss fight
         _G.SFX.play("level_exit")
-        self:moveToNextLevel()
+        self:moveToNextLevel() 
     elseif self.player then
+        -- Check if player took action while in overlay state
         if self.player.actionTaken then
             print("  Player action is true after choice/other sub-state, advancing turn from resume().")
             self.player:endTurnUpdate()
             self.turnManager:nextTurn()
-            if self.turnManager.isPlayerTurn then
-                self.currentMode = GameplayState.Mode.PLAYER_TURN; self:calculateAllEnemyIntents();
-            else
+            
+            if self.turnManager.isPlayerTurn then 
+                self.currentMode = GameplayState.Mode.PLAYER_TURN
+                self:calculateAllEnemyIntents()
+            else 
                 self.currentMode = GameplayState.Mode.ENEMY_TURN
             end
-            if self.player.isDead then self:triggerGameOver("PID_PLAYER TERMINATED.") end
+            
+            if self.player.isDead then 
+                self:triggerGameOver("PID_PLAYER TERMINATED.") 
+            end
         else
+            -- Player didn't take action, reset state
             self.player.actionTaken = false
-            if self.turnManager then self.turnManager.isPlayerTurn = true end
+            if self.turnManager then 
+                self.turnManager.isPlayerTurn = true 
+            end
         end
     end
 
-    if self.map and self.player and not self.pendingBossReward_SubroutineChoice then -- Don't re-center if new level is loading
+    -- Recalculate viewport and FOV
+    if self.map and self.player and not self.pendingBossReward_SubroutineChoice then
         self.map:computeFov(self.player.x, self.player.y, self.fovRadius)
         self.cameraManager:centerOn(self.player.x, self.player.y, self.gameViewport, self.map, true)
     end
-    print(string.format(
-        "Resumed Gameplay from sub-state. Mode: %s, Player ActionTaken: %s, TM.isPlayerTurn: %s, EnemyResolving: %s",
-        self.currentMode,
-        tostring(self.player and self.player.actionTaken),
-        tostring(self.turnManager and self.turnManager.isPlayerTurn),
-        tostring(self.isEnemyActionResolving)))
+    
+    print(string.format("Resumed Gameplay from sub-state. Mode: %s, Player ActionTaken: %s", 
+        self.currentMode, 
+        tostring(self.player and self.player.actionTaken)))
 end
 
 function GameplayState:startTargeting(subroutineInstance)
@@ -489,7 +501,7 @@ function GameplayState:checkForPickups(x, y)
             self:logMessage("Found a SUBROUTINE_CACHE!", config.activeColors.pickup)
             self.map:removeEntity(entityOnTile)
             self.pausedForChoice = true
-            self.stateManager:switch("subroutine_choice", self.player)
+            self.stateManager:push("subroutine_choice", self.player)
             return true
         elseif entityOnTile.pickupType == "DATA_FRAGMENT" then
             local value = entityOnTile.data.value or 10

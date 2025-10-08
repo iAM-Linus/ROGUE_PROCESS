@@ -805,7 +805,7 @@ function SubroutineChoiceState:keypressed(key)
         love.timer.sleep(0.3)
 
         -- Return to gameplay
-        self.stateManager:switch("gameplay")
+        self.stateManager:pop()
     elseif key == "escape" then
         _G.SFX.play("ui_back")
 
@@ -823,7 +823,7 @@ function SubroutineChoiceState:keypressed(key)
         --end
 
         -- Return to gameplay
-        self.stateManager:switch("gameplay")
+        self.stateManager:pop()
     end
     return true
 end

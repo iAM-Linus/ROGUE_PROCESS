@@ -149,7 +149,7 @@ function GlitchSwarmer:die()
     GlitchSwarmer.activeSwarmerCount = GlitchSwarmer.activeSwarmerCount - 1
     -- print("Swarmer died. Active count: " .. GlitchSwarmer.activeSwarmerCount)
     -- Add any GlitchSwarmer-specific death effects, like a tiny visual glitch
-    local gs = _G.GameState.current()
+    local gs = _G.Game.states:getCurrent()
     if gs and ParticleFX then
         ParticleFX.spawnFloatingText(gs, "~", self.x, self.y, {color=self.color, duration=0.3, vy=-5, font=_G.Fonts.large})
     end

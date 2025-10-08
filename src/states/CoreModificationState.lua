@@ -524,7 +524,7 @@ function CoreModificationState:keypressed(key)
             end
 
             -- Return to gameplay
-            self.stateManager:switch("gameplay")
+            self.stateManager:pop()
         end
         return true
     end
@@ -603,7 +603,7 @@ function CoreModificationState:keypressed(key)
         end
 
         -- Return to gameplay
-        self.stateManager:switch("gameplay")
+        self.stateManager:pop()
     end
 
     return true
