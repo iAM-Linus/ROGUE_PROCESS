@@ -1,5 +1,4 @@
 -- src/core/InputHandler.lua
-local GameStateManager = _G.GameState -- To switch states (e.g., to main menu, core mods)
 local Helpers = require 'src.utils.Helpers' -- If needed for any specific input logic
 
 local InputHandler = {}
@@ -12,7 +11,7 @@ function InputHandler.processKey(key, scancode, isrepeat, gameplayState)
     -- Overall checks that might block any further input processing
     if gs.currentMode == gameplayState.Mode.GAME_OVER then
         if key == "return" or key == "kpenter" then
-            GameStateManager.switch("mainmenu", { resetLevel = true })
+            gs:handleGameOverReturn()
             return true 
         end
         return false 

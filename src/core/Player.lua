@@ -24,6 +24,7 @@ function Player:new(x, y, aiCoreData)
     local instance = Entity:new(x, y, quadName, aiCoreData.color, name, true, initialHp)
     setmetatable(instance, Player)
 
+    instance.isPlayer = true
     instance.coreId = aiCoreData.id -- Store which core this player is
 
     -- Apply base stats from the core
@@ -62,7 +63,7 @@ function Player:new(x, y, aiCoreData)
 end
 
 --function Player:draw(tileX, tileY, tileSize)
---    local gameplayState = _G.GameState.current() -- Get current gameplay state for context
+--    local gameplayState = _G.Game.states:getCurrent() -- Get current gameplay state for context
 --
 --    -- Default drawing behavior from Entity
 --    -- Entity.draw(self, tileX, tileY, tileSize) -- This would draw the original character and color
@@ -210,9 +211,9 @@ function Player:takeDamage(amount, attackerName)
         shieldEffect.data.amount = shieldEffect.data.amount - absorbed
         actualAmount = actualAmount - absorbed
         local shieldMsg = string.format("%s absorbs %d damage! (Shield: %d remaining)", shieldEffect.name or "Shield", absorbed, shieldEffect.data.amount)
-        _G.GameState.current():logMessage(shieldMsg, _G.Config.activeColors.accent)
+        _G.Game.states:getCurrent():logMessage(shieldMsg, _G.Config.activeColors.accent)
         if shieldEffect.data.amount <= 0 then
-             _G.GameState.current():logMessage(shieldEffect.name .. " depleted!", _G.Config.activeColors.accent)
+             _G.Game.states:getCurrent():logMessage(shieldEffect.name .. " depleted!", _G.Config.activeColors.accent)
              -- Optionally remove the effect immediately when depleted, or let duration handle it
              -- For now, let duration handle removal. Just set amount to 0.
         end
@@ -220,7 +221,7 @@ function Player:takeDamage(amount, attackerName)
 
     if actualAmount <= 0 then -- All damage absorbed
         -- Spawn "Absorbed" particle?
-        local gameplayState = _G.GameState.current()
+        local gameplayState = _G.Game.states:getCurrent()
         if gameplayState and gameplayState.ParticleFX then
         gameplayState.ParticleFX.spawnFloatingText(gameplayState, "ABSORBED", self.x, self.y, {
             color = {0.7, 0.7, 1, 1}, font = _G.Fonts.small, duration = 0.7, vy = -20
@@ -232,7 +233,7 @@ function Player:takeDamage(amount, attackerName)
     -- Apply remaining damage (copied from base Entity:takeDamage logic)
     self.hp = self.hp - actualAmount
 
-    local gameplayState = _G.GameState.current()
+    local gameplayState = _G.Game.states:getCurrent()
     if gameplayState and gameplayState.triggerScreenShake then
         local shakeIntensity = 5 -- Player getting hit might feel more impactful
         if actualAmount > self.maxHp * 0.3 then

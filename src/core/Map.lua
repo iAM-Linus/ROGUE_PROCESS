@@ -651,7 +651,6 @@ function Map:_castLight(cx, cy, radius, row, startSlope, endSlope, octant)
     if startSlope < endSlope then return end -- Invalid slope range
 
     local radiusSquared = radius * radius
-    local gs = _G.GameState.current() -- For logging, if needed
 
     for i = row, radius do -- For each row (distance from center)
         local dx = -i - 1
@@ -727,7 +726,6 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
     
     self:updateAnimations(love.timer.getDelta())
     
-    local gameplayState = _G.GameState.current()
     local time = love.timer.getTime()
     
     -- Draw ambient particles first (background layer)

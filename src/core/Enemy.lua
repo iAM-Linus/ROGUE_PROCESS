@@ -118,7 +118,7 @@ function Enemy:die()
     Entity.die(self) -- Call base Entity die method (sets char, color, isDead flag etc.)
 
     -- Common enemy death behavior: drop data fragments
-    local gameplay = _G.GameState.current() -- Assuming current state is GameplayState
+    local gameplay = _G.Game.states:getCurrent() -- Assuming current state is GameplayState
     if gameplay and gameplay.player then -- Check if player exists
         gameplay.player.dataFragments = gameplay.player.dataFragments + (self.dataFragmentsValue or 0)
         if (self.dataFragmentsValue or 0) > 0 then

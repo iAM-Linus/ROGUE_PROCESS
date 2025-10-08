@@ -280,7 +280,7 @@ end
 function HUDManager:drawSubroutineList(player, currentMode, targetingSubroutine, x, y, width, height, font)
     love.graphics.setFont(font)
     local lineHeight = font:getHeight() + 4
-    local gameplayState = _G.GameState.current()
+    local gameplayState = _G.Game.states:getCurrent()
     
     for i = 1, player.maxSubroutines do
         local sub = player.subroutines[i]
@@ -341,11 +341,11 @@ function HUDManager:drawInspectionPanel(map, currentMode, lookCursor, targetCurs
     local panelTitle = "SCAN_DATA"
     local targetX, targetY = nil, nil
     
-    if currentMode == _G.GameState.current().Mode.LOOKING and lookCursor and lookCursor.visible then
+    if currentMode == _G.Game.states:getCurrent().Mode.LOOKING and lookCursor and lookCursor.visible then
         entityToInspect = map:getEntityAt(lookCursor.x, lookCursor.y)
         panelTitle = entityToInspect and entityToInspect.name or string.format("TILE (%d,%d)", lookCursor.x, lookCursor.y)
         targetX, targetY = lookCursor.x, lookCursor.y
-    elseif currentMode == _G.GameState.current().Mode.TARGETING and targetCursor and targetCursor.visible then
+    elseif currentMode == _G.Game.states:getCurrent().Mode.TARGETING and targetCursor and targetCursor.visible then
         entityToInspect = map:getEntityAt(targetCursor.x, targetCursor.y)
         panelTitle = entityToInspect and entityToInspect.name or string.format("TARGET (%d,%d)", targetCursor.x, targetCursor.y)
         targetX, targetY = targetCursor.x, targetCursor.y

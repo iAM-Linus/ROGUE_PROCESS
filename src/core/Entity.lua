@@ -52,7 +52,7 @@ function Entity:updateAnimation(dt)
         self.deathAnimationProgress = 0
         
         -- Add death animation to global animation manager if available
-        local gs = _G.GameState.current()
+        local gs = _G.Game.states:getCurrent()
         if gs and gs.animationManager then
             gs.animationManager:addFlashEffect({1, 0.3, 0.3, 0.8}, 0.6, 0.3)
             gs.animationManager:addPulseEffect(
@@ -102,7 +102,7 @@ function Entity:move(dx, dy)
     self.targetY = self.y
     
     -- Add movement trail effect
-    local gs = _G.GameState.current()
+    local gs = _G.Game.states:getCurrent()
     if gs and gs.animationManager and not self.isDead then
         gs.animationManager:addParticleTrail(
             self.animX * _G.Config.spriteSize + _G.Config.spriteSize/2,
@@ -272,7 +272,7 @@ function Entity:takeDamage(amount, attackerName)
         shieldEffectInstance.data.amount = shieldEffectInstance.data.amount - absorbed
         actualAmount = actualAmount - absorbed
         
-        local gameplayState = _G.GameState.current()
+        local gameplayState = _G.Game.states:getCurrent()
         if gameplayState and gameplayState.logMessage then
             local shieldMsg = string.format("%s's %s absorbs %d damage! (Shield: %d left)", self.name, shieldEffectInstance.name or "Shield", absorbed, shieldEffectInstance.data.amount)
             gameplayState:logMessage(shieldMsg, Config.activeColors.accent)
@@ -292,7 +292,7 @@ function Entity:takeDamage(amount, attackerName)
     self.hp = self.hp - actualAmount
     local message = string.format("%s takes %d damage from %s.", self.name, actualAmount, attackerName or "UNKNOWN_SOURCE")
 
-    local gameplayState = _G.GameState.current() -- Assuming current state is GameplayState
+    local gameplayState = _G.Game.states:getCurrent()
     if gameplayState and gameplayState.triggerScreenShake then
         local shakeIntensity = 3 -- Default shake for generic enemy damage
         if amount > self.maxHp * 0.25 then -- If damage is significant (e.g., >25% of max HP)
@@ -302,7 +302,7 @@ function Entity:takeDamage(amount, attackerName)
     end
 
     if actualAmount > 0 then
-        if self == _G.GameState.current().player then -- If player is hit
+        if self == _G.Game.states:getCurrent().player then -- If player is hit
             _G.SFX.play("enemy_attack_hit") -- Or a specific "player_hurt" sound
         else -- An enemy is hit
             _G.SFX.play("player_attack_hit")
@@ -313,7 +313,7 @@ function Entity:takeDamage(amount, attackerName)
     self.flashTimer = 0.3
     self.lastDamageTime = love.timer.getTime()
     
-    local gs = _G.GameState.current()
+    local gs = _G.Game.states:getCurrent()
     if gs and gs.animationManager then
         -- Screen shake for significant damage
         if amount > self.maxHp * 0.2 then
@@ -353,13 +353,13 @@ end
 
 function Entity:addStatusEffect(effectData)
     -- Check for stun resistance if this is the player and the effect is stun
-    if self == _G.GameState.current().player and effectData.id == "stun" then -- Assuming player is accessible
+    if self == _G.Game.states:getCurrent().player and effectData.id == "stun" then -- Assuming player is accessible
         if self:hasCoreModificationFlag("error_correction_1") then
             local modDef = CoreModificationDB.getById("error_correction_1")
             if modDef and modDef.getEffectValue then
                 local resistChance = modDef.getEffectValue(self, self:getCoreModificationLevel("error_correction_1"))
                 if love.math.random() < resistChance then
-                    _G.GameState.current():logMessage(self.name .. " resisted " .. (effectData.name or "Stun") .. " due to ECC Memory!", Config.activeColors.pickup)
+                    _G.Game.states:getCurrent():logMessage(self.name .. " resisted " .. (effectData.name or "Stun") .. " due to ECC Memory!", Config.activeColors.pickup)
                     return -- Effect resisted
                 end
             end
@@ -390,7 +390,7 @@ end
 
 function Entity:processStatusEffectsStartTurn()
     if self:hasStatusEffect("stun") then
-        _G.GameState.current():logMessage(self.name .. " is stunned and cannot act!", {1, 1, 0.5, 1})
+        _G.Game.states:getCurrent():logMessage(self.name .. " is stunned and cannot act!", {1, 1, 0.5, 1})
         return true
     end
     -- Add checks for other action-preventing effects here (e.g., frozen)
@@ -434,7 +434,7 @@ function Entity:die()
     -- Further death logic (e.g., drop loot) can be added here or in subclasses
 
     -- Spawn Death Particles
-    local gameplayState = _G.GameState.current()
+    local gameplayState = _G.Game.states:getCurrent()
 
     if gameplayState and gameplayState.objective == "defeat_boss" and self == gameplayState.currentBossEntity then
         gameplayState:logMessage(self.name .. " DEFEATED! Exit portal activated.", Config.activeColors.pickup)

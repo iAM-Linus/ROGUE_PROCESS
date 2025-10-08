@@ -1460,6 +1460,12 @@ function GameplayState:keypressed(key, scancode, isrepeat)
     return InputHandler.processKey(key, scancode, isrepeat, self)
 end
 
+function GameplayState:handleGameOverReturn()
+    if self.stateManager then
+        self.stateManager:switch("mainmenu")
+    end
+end
+
 function GameplayState:leave()
     GlitchSwarmer.resetGlobalCount()
     print("Left GameplayState")
