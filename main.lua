@@ -2,7 +2,7 @@
 
 -- Configuration: Set to true to use migrated states
 local USE_NEW_MAIN_MENU = true -- MainMenuState migrated
-local USE_NEW_NEWRUN = false   -- Not yet migrated
+local USE_NEW_NEWRUN = true   -- Not yet migrated
 local USE_NEW_GAMEPLAY = false -- Not yet migrated
 local USE_NEW_SUBROUTINE_CHOICE = true
 local USE_NEW_CORE_MODIFICATION = true
@@ -118,7 +118,14 @@ function love.load()
         _G.GameState.register("core_modification", CoreModificationState:new())
     end
 
-    _G.GameState.register("newrun", NewRunState:new())
+    if USE_NEW_NEWRUN then
+        print("  - newrun: MIGRATED version")
+        _G.GameState.register("newrun", NewRunState:new(_G.Game))
+    else
+        print("  - newrun: Legacy version")
+        _G.GameState.register("newrun", NewRunState:new())
+    end
+
     _G.GameState.register("gameplay", GameplayState:new())
 
     -- Also register with new StateManager (for future use)

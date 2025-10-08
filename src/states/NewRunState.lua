@@ -1,5 +1,5 @@
 -- src/states/NewRunState.lua - Enhanced with modern animations and visuals
-local GameState = _G.GameState
+local BaseState = require 'src.core.base_state'
 local Helpers = require 'src.utils.Helpers'
 local UIHelpers = require "src.ui.ui_helpers"
 local AICoreDB = require "src.core.AICoreDB"
@@ -8,9 +8,20 @@ local Timer = require 'src.utils.Timer'
 
 local NewRunState = {}
 NewRunState.__index = NewRunState
+setmetatable(NewRunState, {__index = BaseState})
 
-function NewRunState:new()
-    local instance = setmetatable({}, NewRunState)
+function NewRunState:new(game)
+    -- Support both new (game object) and legacy (nil) initialization
+    game = game or {
+        config = _G.Config,
+        resources = { getFonts = function() return _G.Fonts end },
+        events = nil
+    }
+    
+    local instance = BaseState.new(self, game)
+    setmetatable(instance, NewRunState)
+    instance.name = "NewRunState"
+
     instance.title = "// INITIALIZE_NEW_PROCESS //"
     
     instance.selectableCores = {}
@@ -65,8 +76,8 @@ function NewRunState:new()
 end
 
 function NewRunState:initializeVisualEffects()
-    local nativeW = _G.Config.nativeResolution.width
-    local nativeH = _G.Config.nativeResolution.height
+    local nativeW = (self.config or _G.Config).nativeResolution.width
+    local nativeH = (self.config or _G.Config).nativeResolution.height
     
     -- Neural network connection lines
     for i = 1, 15 do
@@ -92,7 +103,7 @@ function NewRunState:initializeVisualEffects()
             maxLife = love.math.random(5, 10),
             size = love.math.random(1, 3),
             char = love.math.random() < 0.5 and "·" or "○",
-            color = _G.Config.activeColors.accent,
+            color = (self.config or _G.Config).activeColors.accent,
             phase = love.math.random() * math.pi * 2
         })
     end
@@ -156,13 +167,16 @@ function NewRunState:initializeVisualEffects()
             life = love.math.random(2, 5),
             maxLife = love.math.random(2, 5),
             size = love.math.random(1, 3),
-            color = _G.Config.activeColors.highlight
+            color = (self.config or _G.Config).activeColors.highlight
         })
     end
 end
 
 function NewRunState:enter()
+    BaseState.enter(self)
+
     print("Entered Enhanced NewRunState")
+
     self.selectableCores = AICoreDB.getSelectableCores()
     if #self.selectableCores == 0 then
         print("ERROR: No selectable AI Cores found! Adding default.")
@@ -191,10 +205,21 @@ function NewRunState:enter()
     self.coreInitialization.active = true
     self.coreInitialization.progress = 0
     
-    love.graphics.setBackgroundColor(_G.Config.activeColors.background)
+    love.graphics.setBackgroundColor(self.config.activeColors.background)
+
+    -- Emit event
+    if self.events then
+        self.events:emit("new_run_enetered", {
+            availableCoresCount = #self.selectableCores
+        })
+    end
 end
 
 function NewRunState:update(dt)
+    BaseState.update(self, dt)
+
+    if self.paused then return end
+
     Timer.update(dt)
     
     self.animationTime = self.animationTime + dt
@@ -239,10 +264,10 @@ function NewRunState:update(dt)
         particle.life = particle.life - dt
         
         -- Wrap around screen
-        if particle.x < -10 then particle.x = _G.Config.nativeResolution.width + 10 end
-        if particle.x > _G.Config.nativeResolution.width + 10 then particle.x = -10 end
-        if particle.y < -10 then particle.y = _G.Config.nativeResolution.height + 10 end
-        if particle.y > _G.Config.nativeResolution.height + 10 then particle.y = -10 end
+        if particle.x < -10 then particle.x = (self.config or _G.Config).nativeResolution.width + 10 end
+        if particle.x > (self.config or _G.Config).nativeResolution.width + 10 then particle.x = -10 end
+        if particle.y < -10 then particle.y = (self.config or _G.Config).nativeResolution.height + 10 end
+        if particle.y > (self.config or _G.Config).nativeResolution.height + 10 then particle.y = -10 end
         
         if particle.life <= 0 then
             particle.life = particle.maxLife
@@ -269,7 +294,7 @@ function NewRunState:update(dt)
             particle.y = particle.y + stream.speed * dt
             particle.alpha = particle.alpha * 0.998
             
-            if particle.y > _G.Config.nativeResolution.height + 20 or particle.alpha < 0.1 then
+            if particle.y > (self.config or _G.Config).nativeResolution.height + 20 or particle.alpha < 0.1 then
                 table.remove(stream.particles, i)
             end
         end
@@ -285,9 +310,9 @@ function NewRunState:update(dt)
     for _, code in ipairs(self.matrixCode) do
         code.y = code.y + code.speed * dt
         
-        if code.y > _G.Config.nativeResolution.height + 50 then
+        if code.y > (self.config or _G.Config).nativeResolution.height + 50 then
             code.y = love.math.random(-100, -20)
-            code.x = love.math.random(0, _G.Config.nativeResolution.width)
+            code.x = love.math.random(0, (self.config or _G.Config).nativeResolution.width)
         end
     end
     
@@ -313,31 +338,32 @@ function NewRunState:update(dt)
 end
 
 function NewRunState:drawEnhancedBackground()
-    local nativeW, nativeH = _G.Config.nativeResolution.width, _G.Config.nativeResolution.height
+    local config = self.config or _G.Config
+    local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
     
     -- Base background with subtle gradient
-    love.graphics.setColor(_G.Config.activeColors.background)
+    love.graphics.setColor(config.activeColors.background)
     love.graphics.rectangle("fill", 0, 0, nativeW, nativeH)
     
     -- Matrix code rain
     love.graphics.setFont(_G.Fonts.small)
     for _, code in ipairs(self.matrixCode) do
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], code.alpha)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], code.alpha)
         love.graphics.print(code.code, code.x, code.y)
     end
     
     -- Neural network connection lines
     for _, line in ipairs(self.neuralNetworkLines) do
         local alpha = line.intensity * 0.3
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], alpha)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], alpha)
         love.graphics.setLineWidth(1)
         love.graphics.line(line.startX, line.startY, line.endX, line.endY)
         
         -- Add nodes at connection points
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], alpha * 2)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], alpha * 2)
         love.graphics.circle("fill", line.startX, line.startY, 2)
         love.graphics.circle("fill", line.endX, line.endY, 2)
     end
@@ -346,8 +372,8 @@ function NewRunState:drawEnhancedBackground()
     love.graphics.setFont(_G.Fonts.small)
     for _, stream in ipairs(self.dataStreamEffects) do
         for _, particle in ipairs(stream.particles) do
-            love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                                  _G.Config.activeColors.accent[3], particle.alpha)
+            love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                                  config.activeColors.accent[3], particle.alpha)
             love.graphics.print(particle.char, stream.x, particle.y)
         end
     end
@@ -366,21 +392,21 @@ function NewRunState:drawEnhancedBackground()
         local alpha = effect.intensity * effect.flicker
         
         -- Holographic rectangle
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], alpha * 0.2)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], alpha * 0.2)
         love.graphics.rectangle("fill", effect.x + distortion, effect.y, effect.width, effect.height)
         
         -- Holographic border
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], alpha * 0.6)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], alpha * 0.6)
         love.graphics.rectangle("line", effect.x + distortion, effect.y, effect.width, effect.height)
     end
     
     -- Core selection area highlight
     if self.selectedUIElement == "core" then
         local pulse = 0.3 + 0.4 * math.sin(self.selectionPulse)
-        love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                              _G.Config.activeColors.highlight[3], pulse * 0.3)
+        love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                              config.activeColors.highlight[3], pulse * 0.3)
         
         local coreAreaX = nativeW * 0.25
         local coreAreaY = nativeH * 0.2
@@ -397,8 +423,8 @@ function NewRunState:drawEnhancedBackground()
             local particleX = coreAreaX + coreAreaW/2 + math.cos(angle) * radius
             local particleY = coreAreaY + coreAreaH/2 + math.sin(angle) * radius
             
-            love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                                  _G.Config.activeColors.highlight[3], pulse * 0.8)
+            love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                                  config.activeColors.highlight[3], pulse * 0.8)
             love.graphics.circle("fill", particleX, particleY, 2)
         end
     end
@@ -410,30 +436,28 @@ function NewRunState:drawEnhancedBackground()
         local beamAlpha = self.initializationBeam.intensity * 0.5
         
         -- Main beam
-        love.graphics.setColor(_G.Config.activeColors.pickup[1], 
-                              _G.Config.activeColors.pickup[2], 
-                              _G.Config.activeColors.pickup[3], beamAlpha)
+        love.graphics.setColor(config.activeColors.pickup[1], 
+                              config.activeColors.pickup[2], 
+                              config.activeColors.pickup[3], beamAlpha)
         love.graphics.rectangle("fill", 0, beamY - 2, beamWidth, 4)
         
         -- Beam glow
-        love.graphics.setColor(_G.Config.activeColors.pickup[1], 
-                              _G.Config.activeColors.pickup[2], 
-                              _G.Config.activeColors.pickup[3], beamAlpha * 0.3)
+        love.graphics.setColor(config.activeColors.pickup[1], 
+                              config.activeColors.pickup[2], 
+                              config.activeColors.pickup[3], beamAlpha * 0.3)
         love.graphics.rectangle("fill", 0, beamY - 6, beamWidth, 12)
     end
     
     -- Scanline effects
-    love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                          _G.Config.activeColors.accent[3], 0.05)
+    love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                          config.activeColors.accent[3], 0.05)
     for y = 0, nativeH, 4 do
         local scanlineAlpha = 0.02 + 0.03 * math.sin(self.scanlinePhase + y * 0.1)
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], scanlineAlpha)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], scanlineAlpha)
         love.graphics.line(0, y, nativeW, y)
     end
 end
-
--- ... (keeping all the existing core display and info update methods) ...
 
 function NewRunState:updateCoreDisplaySlots(instant)
     if #self.selectableCores == 0 then return end
@@ -449,13 +473,13 @@ function NewRunState:updateCoreDisplaySlots(instant)
     local newNextCoreDef = self.selectableCores[newNextIndex]
 
     if instant then
-        slots.current.char = newCurrentCoreDef.char; slots.current.color = newCurrentCoreDef.color or _G.Config.activeColors.player
+        slots.current.char = newCurrentCoreDef.char; slots.current.color = newCurrentCoreDef.color or (self.config or _G.Config).activeColors.player
         slots.current.scale = 1.0; slots.current.alpha = 1.0; slots.current.x_offset_factor = 0; slots.current.glow = 1
 
-        slots.prev.char = newPrevCoreDef.char; slots.prev.color = newPrevCoreDef.color or _G.Config.activeColors.player
+        slots.prev.char = newPrevCoreDef.char; slots.prev.color = newPrevCoreDef.color or (self.config or _G.Config).activeColors.player
         slots.prev.scale = 0.7; slots.prev.alpha = (#self.selectableCores > 1) and 0.5 or 0; slots.prev.x_offset_factor = -0.35; slots.prev.glow = 0
         
-        slots.next.char = newNextCoreDef.char; slots.next.color = newNextCoreDef.color or _G.Config.activeColors.player
+        slots.next.char = newNextCoreDef.char; slots.next.color = newNextCoreDef.color or (self.config or _G.Config).activeColors.player
         slots.next.scale = 0.7; slots.next.alpha = (#self.selectableCores > 1) and 0.5 or 0; slots.next.x_offset_factor = 0.35; slots.next.glow = 0
         
         self.currentDisplayCoreIndex = self.targetCoreIndex
@@ -562,15 +586,21 @@ function NewRunState:updateDisplayedCoreInfo()
 end
 
 function NewRunState:draw()
-    local nativeW, nativeH = _G.Config.nativeResolution.width, _G.Config.nativeResolution.height
+    if not self.visible then return end
+
+    BaseState.draw(self)
+
+    local config = self.config or _G.Config
+    local fonts = self.resources and self.resources:getFonts() or _G.Fonts
+    local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
     
     -- Enhanced animated background
     self:drawEnhancedBackground()
 
     -- Enhanced title with holographic effects
-    love.graphics.setFont(_G.Fonts.large)
-    UIHelpers.drawHolographicText(self.title, nativeW/2 - _G.Fonts.large:getWidth(self.title)/2, 
-                                  25, _G.Fonts.large, _G.Config.activeColors.accent, self.animationTime)
+    love.graphics.setFont(fonts.large)
+    UIHelpers.drawHolographicText(self.title, nativeW/2 - fonts.large:getWidth(self.title)/2, 
+                                  25, fonts.large, config.activeColors.accent, self.animationTime)
 
     if #self.selectableCores == 0 then return end
 
@@ -596,30 +626,30 @@ function NewRunState:draw()
                                                            "CORE_SPECS", "highlighted")
         
         -- Enhanced stats display with animations
-        love.graphics.setFont(_G.Fonts.medium)
+        love.graphics.setFont(fonts.medium)
         local statY = bsPY + 15
-        local statLineHeight = _G.Fonts.medium:getHeight() + 8
+        local statLineHeight = fonts.medium:getHeight() + 8
         
         -- Animated stats header
         local headerPulse = 0.8 + 0.2 * math.sin(self.animationTime * 2)
-        love.graphics.setColor(_G.Config.activeColors.highlight[1] * headerPulse, 
-                              _G.Config.activeColors.highlight[2] * headerPulse, 
-                              _G.Config.activeColors.highlight[3] * headerPulse, 1)
+        love.graphics.setColor(config.activeColors.highlight[1] * headerPulse, 
+                              config.activeColors.highlight[2] * headerPulse, 
+                              config.activeColors.highlight[3] * headerPulse, 1)
         love.graphics.print("SPECIFICATIONS:", bsPX + 10, statY)
         statY = statY + statLineHeight + 5
         
         -- Enhanced stat display with visual bars
         for statName, statValue in pairs(selectedCoreDataForInfo.baseStats) do
-            love.graphics.setColor(_G.Config.activeColors.text)
-            love.graphics.setFont(_G.Fonts.small)
+            love.graphics.setColor(config.activeColors.text)
+            love.graphics.setFont(fonts.small)
             love.graphics.print(string.upper(statName) .. ":", bsPX + 15, statY)
             
             -- Value with glow effect
-            love.graphics.setFont(_G.Fonts.medium)
+            love.graphics.setFont(fonts.medium)
             local valuePulse = 0.9 + 0.1 * math.sin(self.animationTime * 3)
-            love.graphics.setColor(_G.Config.activeColors.pickup[1] * valuePulse, 
-                                  _G.Config.activeColors.pickup[2] * valuePulse, 
-                                  _G.Config.activeColors.pickup[3] * valuePulse, 1)
+            love.graphics.setColor(config.activeColors.pickup[1] * valuePulse, 
+                                  config.activeColors.pickup[2] * valuePulse, 
+                                  config.activeColors.pickup[3] * valuePulse, 1)
             love.graphics.print(tostring(statValue), bsPX + bsPW - 60, statY - 2)
             
             -- Animated stat bar
@@ -628,13 +658,13 @@ function NewRunState:draw()
             local maxStatValue = (statName == "hp" and 150) or (statName == "cpu" and 100) or (statName == "attack" and 20) or 10
             local statPercent = math.min(1, statValue / maxStatValue)
             
-            love.graphics.setColor(_G.Config.activeColors.background[1], _G.Config.activeColors.background[2], 
-                                  _G.Config.activeColors.background[3], 0.8)
+            love.graphics.setColor(config.activeColors.background[1], config.activeColors.background[2], 
+                                  config.activeColors.background[3], 0.8)
             love.graphics.rectangle("fill", bsPX + 15, statY + statLineHeight - 8, barWidth, barHeight)
             
             -- Animated fill
-            local fillColor = _G.Config.activeColors.highlight
-            if statName == "hp" then fillColor = _G.Config.activeColors.player
+            local fillColor = config.activeColors.highlight
+            if statName == "hp" then fillColor = config.activeColors.player
             elseif statName == "cpu" then fillColor = {0.3, 0.7, 1, 1}
             elseif statName == "attack" then fillColor = {1, 0.5, 0.3, 1}
             end
@@ -652,8 +682,8 @@ function NewRunState:draw()
         end
         
         -- Core type indicator
-        love.graphics.setFont(_G.Fonts.small)
-        love.graphics.setColor(_G.Config.activeColors.accent)
+        love.graphics.setFont(fonts.small)
+        love.graphics.setColor(config.activeColors.accent)
         love.graphics.print("TYPE: " .. (selectedCoreDataForInfo.type or "STANDARD"), bsPX + 15, statY + 10)
     end
 
@@ -673,6 +703,8 @@ function NewRunState:draw()
 end
 
 function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, selectedCoreData)
+    local config = self.config or _G.Config
+    
     local coreDisplayY = panelY + math.floor(panelH * 0.35)
     
     -- Core initialization effects
@@ -690,8 +722,8 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
         end
         
         -- Initialization ring
-        love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                              _G.Config.activeColors.highlight[3], 0.6 * progress)
+        love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                              config.activeColors.highlight[3], 0.6 * progress)
         love.graphics.circle("line", centerX, coreDisplayY, 60 * progress)
     end
     
@@ -771,14 +803,14 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
         UIHelpers.drawHolographicText(selectedCoreData.name, 
                                       centerX - _G.Fonts.large:getWidth(selectedCoreData.name)/2, 
                                       coreNameY, _G.Fonts.large, 
-                                      _G.Config.activeColors.highlight, self.animationTime)
+                                      config.activeColors.highlight, self.animationTime)
         
         -- Core description with subtle animation
         love.graphics.setFont(_G.Fonts.medium)
         local descPulse = 0.8 + 0.2 * math.sin(self.animationTime * 1.5)
-        love.graphics.setColor(_G.Config.activeColors.text[1] * descPulse, 
-                              _G.Config.activeColors.text[2] * descPulse, 
-                              _G.Config.activeColors.text[3] * descPulse, 1)
+        love.graphics.setColor(config.activeColors.text[1] * descPulse, 
+                              config.activeColors.text[2] * descPulse, 
+                              config.activeColors.text[3] * descPulse, 1)
         love.graphics.printf(selectedCoreData.description, 
                            centerX - displayW/2 + 20, coreDescY, displayW - 40, "center")
     end
@@ -786,8 +818,8 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
     -- Core selection indicators
     if self.selectedUIElement == "core" then
         local indicatorPulse = 0.7 + 0.3 * math.sin(self.selectionPulse)
-        love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                              _G.Config.activeColors.highlight[3], indicatorPulse)
+        love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                              config.activeColors.highlight[3], indicatorPulse)
         
         -- Navigation arrows
         if #self.selectableCores > 1 then
@@ -797,17 +829,19 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
         end
         
         -- Selection field
-        love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                              _G.Config.activeColors.highlight[3], indicatorPulse * 0.2)
+        love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                              config.activeColors.highlight[3], indicatorPulse * 0.2)
         UIHelpers.drawRoundedRect(centerX - displayW/2, panelY + panelH*0.2, displayW, panelH*0.5, 8, "fill")
         
-        love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                              _G.Config.activeColors.highlight[3], indicatorPulse * 0.6)
+        love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                              config.activeColors.highlight[3], indicatorPulse * 0.6)
         UIHelpers.drawRoundedRect(centerX - displayW/2, panelY + panelH*0.2, displayW, panelH*0.5, 8, "line")
     end
 end
 
 function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
+    local config = self.config or _G.Config
+
     love.graphics.setFont(_G.Fonts.medium)
     local subItemY = subPY + 20
     local subItemLineHeight = _G.Fonts.medium:getHeight() + 8
@@ -818,18 +852,18 @@ function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
         
         -- Subroutine name with glow
         local namePulse = 0.9 + 0.1 * math.sin(self.animationTime * 2)
-        love.graphics.setColor(_G.Config.activeColors.pickup[1] * namePulse, 
-                              _G.Config.activeColors.pickup[2] * namePulse, 
-                              _G.Config.activeColors.pickup[3] * namePulse, 1)
+        love.graphics.setColor(config.activeColors.pickup[1] * namePulse, 
+                              config.activeColors.pickup[2] * namePulse, 
+                              config.activeColors.pickup[3] * namePulse, 1)
         love.graphics.print(subInfo.name, subPX + 15, subItemY)
         
         -- Enhanced description
         love.graphics.setFont(_G.Fonts.small)
-        love.graphics.setColor(_G.Config.activeColors.text)
+        love.graphics.setColor(config.activeColors.text)
         love.graphics.printf(subInfo.description, subPX + 20, subItemY + subItemLineHeight + 5, subPW - 40, "left")
         
         -- Status indicator
-        love.graphics.setColor(_G.Config.activeColors.accent)
+        love.graphics.setColor(config.activeColors.accent)
         love.graphics.print("● READY", subPX + 15, subItemY + subItemLineHeight * 3)
     end
     
@@ -848,32 +882,34 @@ function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
         
         -- Slot background with animation
         local slotPulse = 0.3 + 0.2 * math.sin(self.animationTime * 2 + i * 0.5)
-        love.graphics.setColor(_G.Config.activeColors.accent[1], _G.Config.activeColors.accent[2], 
-                              _G.Config.activeColors.accent[3], slotPulse)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], slotPulse)
         UIHelpers.drawRoundedRect(slotX, slotY, slotSize, slotSize, 4, "fill")
         
         -- Slot border
-        love.graphics.setColor(_G.Config.activeColors.accent)
+        love.graphics.setColor(config.activeColors.accent)
         UIHelpers.drawRoundedRect(slotX, slotY, slotSize, slotSize, 4, "line")
         
         -- Slot number
         love.graphics.setFont(_G.Fonts.small)
-        love.graphics.setColor(_G.Config.activeColors.text)
+        love.graphics.setColor(config.activeColors.text)
         love.graphics.print(tostring(i + 1), slotX + slotSize/2 - 4, slotY + slotSize/2 - 6)
         
         -- First slot gets special treatment if there's a starting subroutine
         if i == 0 and #self.availableStartingSubs > 0 and self.availableStartingSubs[1].id ~= "none" then
-            love.graphics.setColor(_G.Config.activeColors.pickup[1], _G.Config.activeColors.pickup[2], 
-                                  _G.Config.activeColors.pickup[3], 0.4)
+            love.graphics.setColor(config.activeColors.pickup[1], config.activeColors.pickup[2], 
+                                  config.activeColors.pickup[3], 0.4)
             UIHelpers.drawRoundedRect(slotX + 1, slotY + 1, slotSize - 2, slotSize - 2, 3, "fill")
             
-            love.graphics.setColor(_G.Config.activeColors.pickup)
+            love.graphics.setColor(config.activeColors.pickup)
             love.graphics.print("●", slotX + slotSize/2 - 2, slotY + slotSize/2 + 8)
         end
     end
 end
 
 function NewRunState:drawEnhancedNavigation(nativeW, nativeH, panelPadding)
+    local config = self.config or _G.Config
+    
     love.graphics.setFont(_G.Fonts.large)
     local buttonW = _G.Fonts.large:getWidth("START") + math.floor(nativeW * 0.06)
     local buttonH = _G.Fonts.large:getHeight() + math.floor(nativeH * 0.025)
@@ -897,38 +933,38 @@ function NewRunState:drawEnhancedNavigation(nativeW, nativeH, panelPadding)
         -- Button glow effect
         if glowIntensity > 0.1 then
             for i = 1, 4 do
-                love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                                      _G.Config.activeColors.highlight[3], glowIntensity * 0.1)
+                love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                                      config.activeColors.highlight[3], glowIntensity * 0.1)
                 UIHelpers.drawRoundedRect(btn.x - i*2, btn.y - i*2, btn.w + i*4, btn.h + i*4, 6 + i, "line")
             end
         end
         
         -- Button background
         local bgAlpha = isSelected and (0.3 + 0.2 * math.sin(self.animationTime * 4)) or 0.1
-        love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                              _G.Config.activeColors.highlight[3], bgAlpha)
+        love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                              config.activeColors.highlight[3], bgAlpha)
         UIHelpers.drawRoundedRect(btn.x, btn.y, btn.w, btn.h, 6, "fill")
         
         -- Button border with animation
         local borderPulse = isSelected and (0.8 + 0.4 * math.sin(self.animationTime * 6)) or 0.6
-        love.graphics.setColor(_G.Config.activeColors.highlight[1] * borderPulse, 
-                              _G.Config.activeColors.highlight[2] * borderPulse, 
-                              _G.Config.activeColors.highlight[3] * borderPulse, 1)
+        love.graphics.setColor(config.activeColors.highlight[1] * borderPulse, 
+                              config.activeColors.highlight[2] * borderPulse, 
+                              config.activeColors.highlight[3] * borderPulse, 1)
         UIHelpers.drawRoundedRect(btn.x, btn.y, btn.w, btn.h, 6, "line")
         
         -- Button text with effects
         local textPulse = isSelected and (0.9 + 0.2 * math.sin(self.animationTime * 8)) or 1
-        love.graphics.setColor(_G.Config.activeColors.text[1] * textPulse, 
-                              _G.Config.activeColors.text[2] * textPulse, 
-                              _G.Config.activeColors.text[3] * textPulse, 1)
+        love.graphics.setColor(config.activeColors.text[1] * textPulse, 
+                              config.activeColors.text[2] * textPulse, 
+                              config.activeColors.text[3] * textPulse, 1)
         
         local textX = btn.x + btn.w/2 - _G.Fonts.large:getWidth(btn.text)/2
         local textY = btn.y + btn.h/2 - _G.Fonts.large:getHeight()/2
         
         -- Text glow for selected button
         if isSelected and glowIntensity > 0.3 then
-            love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                                  _G.Config.activeColors.highlight[3], glowIntensity * 0.3)
+            love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                                  config.activeColors.highlight[3], glowIntensity * 0.3)
             for dx = -1, 1 do
                 for dy = -1, 1 do
                     if dx ~= 0 or dy ~= 0 then
@@ -938,9 +974,9 @@ function NewRunState:drawEnhancedNavigation(nativeW, nativeH, panelPadding)
             end
         end
         
-        love.graphics.setColor(_G.Config.activeColors.text[1] * textPulse, 
-                              _G.Config.activeColors.text[2] * textPulse, 
-                              _G.Config.activeColors.text[3] * textPulse, 1)
+        love.graphics.setColor(config.activeColors.text[1] * textPulse, 
+                              config.activeColors.text[2] * textPulse, 
+                              config.activeColors.text[3] * textPulse, 1)
         love.graphics.print(btn.text, textX, textY)
         
         -- Selection particles for buttons
@@ -951,74 +987,155 @@ function NewRunState:drawEnhancedNavigation(nativeW, nativeH, panelPadding)
                 local particleX = btn.x + btn.w/2 + math.cos(angle) * radius
                 local particleY = btn.y + btn.h/2 + math.sin(angle) * radius
                 
-                love.graphics.setColor(_G.Config.activeColors.highlight[1], _G.Config.activeColors.highlight[2], 
-                                      _G.Config.activeColors.highlight[3], glowIntensity * 0.8)
+                love.graphics.setColor(config.activeColors.highlight[1], config.activeColors.highlight[2], 
+                                      config.activeColors.highlight[3], glowIntensity * 0.8)
                 love.graphics.circle("fill", particleX, particleY, 1.5)
             end
         end
     end
 end
 
-function NewRunState:keypressed(key)
-    if self.isCoreAnimating then return true end
-
-    if key == "left" then
-        if self.selectedUIElement == "core" then
-            if #self.selectableCores > 1 then
-                self.targetCoreIndex = self.targetCoreIndex - 1
-                if self.targetCoreIndex < 1 then self.targetCoreIndex = #self.selectableCores end
-                self:updateCoreDisplaySlots(false)
-                self:updateDisplayedCoreInfo()
-                self:triggerCoreSelectionEffect()
+function NewRunState:keypressed(key, scancode, isrepeat)
+    if self.selectedUIElement == "core" then
+        if key == "left" then
+            self.selectedCoreIndex = self.selectedCoreIndex - 1
+            if self.selectedCoreIndex < 1 then
+                self.selectedCoreIndex = #self.selectableCores
             end
-        elseif self.selectedUIElement == "start" then
-            self.selectedUIElement = "back"
-        end
-        _G.SFX.play("ui_navigate")
-    elseif key == "right" then
-        if self.selectedUIElement == "core" then
-            if #self.selectableCores > 1 then
-                self.targetCoreIndex = self.targetCoreIndex + 1
-                if self.targetCoreIndex > #self.selectableCores then self.targetCoreIndex = 1 end
-                self:updateCoreDisplaySlots(false)
-                self:updateDisplayedCoreInfo()
-                self:triggerCoreSelectionEffect()
+            self.targetCoreIndex = self.selectedCoreIndex
+            self:updateCoreDisplaySlots(false)
+            self:updateDisplayedCoreInfo()
+            self.selectedSubroutineIndex = 1
+            _G.SFX.play("ui_navigate")
+            self:triggerCoreSelectionEffect()
+            
+            -- Emit event
+            if self.events then
+                self.events:emit("core_selected", {
+                    coreId = self.selectableCores[self.selectedCoreIndex].id,
+                    coreIndex = self.selectedCoreIndex
+                })
             end
-        elseif self.selectedUIElement == "back" then
-            self.selectedUIElement = "start"
+            
+        elseif key == "right" then
+            self.selectedCoreIndex = self.selectedCoreIndex + 1
+            if self.selectedCoreIndex > #self.selectableCores then
+                self.selectedCoreIndex = 1
+            end
+            self.targetCoreIndex = self.selectedCoreIndex
+            self:updateCoreDisplaySlots(false)
+            self:updateDisplayedCoreInfo()
+            self.selectedSubroutineIndex = 1
+            _G.SFX.play("ui_navigate")
+            self:triggerCoreSelectionEffect()
+            
+            -- Emit event
+            if self.events then
+                self.events:emit("core_selected", {
+                    coreId = self.selectableCores[self.selectedCoreIndex].id,
+                    coreIndex = self.selectedCoreIndex
+                })
+            end
+            
+        elseif key == "down" then
+            self.selectedUIElement = "subroutine"
+            _G.SFX.play("ui_navigate")
+        elseif key == "up" then
+            -- Could add wrapping to navigation buttons
         end
-        _G.SFX.play("ui_navigate")
-    elseif key == "up" then
-        if self.selectedUIElement == "back" or self.selectedUIElement == "start" then
-            self.selectedUIElement = "core"
+        
+    elseif self.selectedUIElement == "subroutine" then
+        if #self.availableStartingSubs > 1 then
+            if key == "up" then
+                self.selectedSubroutineIndex = self.selectedSubroutineIndex - 1
+                if self.selectedSubroutineIndex < 1 then
+                    self.selectedSubroutineIndex = #self.availableStartingSubs
+                end
+                _G.SFX.play("ui_navigate")
+            elseif key == "down" then
+                self.selectedSubroutineIndex = self.selectedSubroutineIndex + 1
+                if self.selectedSubroutineIndex > #self.availableStartingSubs then
+                    self.selectedSubroutineIndex = 1
+                end
+                _G.SFX.play("ui_navigate")
+            elseif key == "left" then
+                self.selectedUIElement = "core"
+                _G.SFX.play("ui_navigate")
+            end
+        else
+            if key == "up" then
+                self.selectedUIElement = "core"
+                _G.SFX.play("ui_navigate")
+            elseif key == "down" then
+                self.selectedUIElement = "start"
+                _G.SFX.play("ui_navigate")
+            end
         end
-        _G.SFX.play("ui_navigate")
-    elseif key == "down" then
-        if self.selectedUIElement == "core" then
-            self.selectedUIElement = "back"
+        
+    elseif self.selectedUIElement == "start" or self.selectedUIElement == "back" then
+        if key == "left" or key == "right" then
+            self.selectedUIElement = (self.selectedUIElement == "start") and "back" or "start"
+            _G.SFX.play("ui_navigate")
+        elseif key == "up" then
+            self.selectedUIElement = "subroutine"
+            _G.SFX.play("ui_navigate")
         end
-        _G.SFX.play("ui_navigate")
-    elseif key == "return" or key == "kpenter" then
+    end
+    
+    if key == "return" or key == "kpenter" then
         if self.selectedUIElement == "start" then
             if #self.selectableCores > 0 then
                 _G.SFX.play("ui_select")
                 self:triggerInitializationEffect()
                 
+                -- Emit event
+                if self.events then
+                    local selectedCore = self.selectableCores[self.targetCoreIndex]
+                    self.events:emit("new_run_started", {
+                        coreId = selectedCore.id,
+                        coreName = selectedCore.name
+                    })
+                end
+                
                 _G.MetaProgress:setSelectedAICoreId(self.selectableCores[self.targetCoreIndex].id)
-                local gameplay = GameState.get("gameplay");
-                if gameplay then gameplay.isInitialized = false end
                 
                 -- Delay state switch to show initialization animation
                 love.timer.sleep(0.4)
-                GameState.switch("gameplay", {resetLevel = true})
+                
+                -- Return to gameplay using legacy bridge
+                if _G.GameState then
+                    local gameplay = _G.GameState.get("gameplay")
+                    if gameplay then 
+                        gameplay.isInitialized = false 
+                    end
+                    _G.GameState.switch("gameplay", {resetLevel = true})
+                end
             end
         elseif self.selectedUIElement == "back" then
             _G.SFX.play("ui_back")
-            GameState.switch("mainmenu")
+            
+            -- Emit event
+            if self.events then
+                self.events:emit("new_run_cancelled", {})
+            end
+            
+            -- Return to main menu using legacy bridge
+            if _G.GameState then
+                _G.GameState.switch("mainmenu")
+            end
         end
     elseif key == "escape" then
         _G.SFX.play("ui_back")
-        GameState.switch("mainmenu")
+        
+        -- Emit event
+        if self.events then
+            self.events:emit("new_run_cancelled", { reason = "escape" })
+        end
+        
+        -- Return to main menu using legacy bridge
+        if _G.GameState then
+            _G.GameState.switch("mainmenu")
+        end
     end
 
     return true 
@@ -1026,8 +1143,8 @@ end
 
 function NewRunState:triggerCoreSelectionEffect()
     -- Add core selection particles
-    local centerX = _G.Config.nativeResolution.width * 0.5
-    local centerY = _G.Config.nativeResolution.height * 0.4
+    local centerX = (self.config or _G.Config).nativeResolution.width * 0.5
+    local centerY = (self.config or _G.Config).nativeResolution.height * 0.4
     
     for i = 1, 8 do
         table.insert(self.backgroundParticles, {
@@ -1039,7 +1156,7 @@ function NewRunState:triggerCoreSelectionEffect()
             maxLife = 1.5,
             size = 2,
             char = "◦",
-            color = _G.Config.activeColors.highlight,
+            color = (self.config or _G.Config).activeColors.highlight,
             phase = 0
         })
     end
@@ -1054,15 +1171,15 @@ function NewRunState:triggerInitializationEffect()
     -- Add initialization particles
     for i = 1, 20 do
         table.insert(self.backgroundParticles, {
-            x = love.math.random(0, _G.Config.nativeResolution.width),
-            y = _G.Config.nativeResolution.height * 0.7,
+            x = love.math.random(0, (self.config or _G.Config).nativeResolution.width),
+            y = (self.config or _G.Config).nativeResolution.height * 0.7,
             vx = love.math.random(-80, 80),
             vy = love.math.random(-40, 40),
             life = 2.5,
             maxLife = 2.5,
             size = 3,
             char = "●",
-            color = _G.Config.activeColors.pickup,
+            color = (self.config or _G.Config).activeColors.pickup,
             phase = 0
         })
     end
@@ -1070,6 +1187,17 @@ end
 
 function NewRunState:leave()
     print("Left Enhanced NewRunState")
+    
+    -- Emit event
+    if self.events then
+        self.events:emit("new_run_left", {})
+    end
+    
+    -- Clean up state
+    self.selectableCores = {}
+    self.availableStartingSubs = {}
+    
+    BaseState.leave(self)
 end
 
 return NewRunState
