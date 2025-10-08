@@ -8,13 +8,6 @@ CoreModificationState.__index = CoreModificationState
 setmetatable(CoreModificationState, { __index = BaseState })
 
 function CoreModificationState:new(game)
-    -- Support both new (game object) and legacy (nil) initialization
-    game = game or {
-        config = _G.Config,
-        resources = { getFonts = function() return _G.Fonts end },
-        events = nil
-    }
-
     local instance = BaseState.new(self, game)
     setmetatable(instance, CoreModificationState)
     instance.name = "CoreModificationState"
@@ -530,12 +523,8 @@ function CoreModificationState:keypressed(key)
                 self.events:emit("core_modification_cancelled", { reason = "no_mods" })
             end
 
-            -- Return to gameplay using legacy bridge
-            if _G.GameState then
-                _G.GameState.switch("gameplay")
-                local gameplay = _G.GameState.get("gameplay")
-                if gameplay and gameplay.resume then gameplay:resume() end
-            end
+            -- Return to gameplay
+            self.stateManager:switch("gameplay")
         end
         return true
     end
@@ -577,22 +566,24 @@ function CoreModificationState:keypressed(key)
                     self.events:emit("core_modification_purchased", {
                         modificationId = modDef.id,
                         modificationName = modDef.name,
-                        cost = cost
+                        cost = cost,
+                        message = message
                     })
                 else
                     self.events:emit("core_modification_purchase_failed", {
                         modificationId = modDef.id,
-                        reason = message
+                        reason = message,
+                        message = message
                     })
                 end
             end
 
-            -- Log message to gameplay if available
-            local gameplay = _G.GameState and _G.GameState.get("gameplay") or nil
-            if gameplay and gameplay.logMessage then
-                local config = self.config or _G.Config
-                gameplay:logMessage(message, success and config.activeColors.pickup or { 1, 0.5, 0.5, 1 })
-            end
+            ---- Log message to gameplay if available
+            --local gameplay = _G.GameState and _G.GameState.get("gameplay") or nil
+            --if gameplay and gameplay.logMessage then
+            --    local config = self.config or _G.Config
+            --    gameplay:logMessage(message, success and config.activeColors.pickup or { 1, 0.5, 0.5, 1 })
+            --end
 
             if success then
                 _G.SFX.play("ui_select")
@@ -611,12 +602,8 @@ function CoreModificationState:keypressed(key)
             self.events:emit("core_modification_cancelled", { reason = "user_escape" })
         end
 
-        -- Return to gameplay using legacy bridge
-        if _G.GameState then
-            _G.GameState.switch("gameplay")
-            local gameplay = _G.GameState.get("gameplay")
-            if gameplay and gameplay.resume then gameplay:resume() end
-        end
+        -- Return to gameplay
+        self.stateManager:switch("gameplay")
     end
 
     return true

@@ -104,7 +104,7 @@ function WorldInitializer.setupLevel(gs, isNewRun)
     gs.turnManager:setEntities(gs.entities)
     print(string.format("  [WorldInit] TurnManager entities set. Count: %d", #gs.entities))
 
-    gs.currentMode = _G.GameState.current().Mode.PLAYER_TURN -- Ensure correct mode
+    gs.currentMode = gs.Mode.PLAYER_TURN -- Ensure correct mode
     gs:calculateAllEnemyIntents()
     gs:calculateGameViewport() -- This will call centerCameraOnPlayer via its own logic
     gs.map:computeFov(gs.player.x, gs.player.y, gs.fovRadius)

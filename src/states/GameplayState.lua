@@ -1,6 +1,6 @@
 -- src/states/GameplayState.lua
+local BaseState = require 'src.core.base_state'
 local WorldInitializer = require 'src.core.managers.WorldInitializer'
-local GameStateManager = _G.GameState
 local CameraManager = require 'src.core.managers.CameraManager'
 local HUDManager = require 'src.core.managers.HUDManager'
 local AnimationManager = require 'src.core.managers.AnimationManager'
@@ -15,6 +15,7 @@ local GlitchSwarmer = require 'src.core.enemies.GlitchSwarmer'
 
 local GameplayState = {}
 GameplayState.__index = GameplayState
+setmetatable(GameplayState, { __index = BaseState })
 
 GameplayState.Mode = {
     PLAYER_TURN = "player_turn",
@@ -27,12 +28,20 @@ GameplayState.Mode = {
     LOOKING = "looking"
 }
 
-function GameplayState:new()
-    local instance = setmetatable({}, GameplayState)
+function GameplayState:new(game)
+    -- Ensure game object exists
+    assert(game, "GameplayState requires game object")
+
+    -- Call BaseState constructor
+    local instance = BaseState.new(self, game)
+    setmetatable(instance, GameplayState)
+    instance.name = "GameplayState"
+
+    -- Initialize all subsystems
     instance.systemCorruption = SystemCorruption:new(instance)
     instance.map = nil
     instance.player = nil
-    instance.isInitialized = false
+    instance.initilized = false
     instance.turnManager = nil
     instance.entities = {} -- All entities that take turns (player, enemies)
     instance.gameMessageLog = {}
@@ -40,7 +49,7 @@ function GameplayState:new()
     instance.cameraManager = CameraManager:new()
     instance.gameViewport = { x = 0, y = 0, width = 0, height = 0 }
     instance.lookCursor = { x = 0, y = 0, visible = false }
-    instance.tileSize = _G.Config.spriteSize
+    instance.tileSize = game.config.spriteSize
     instance.fovRadius = 10
     instance.particleSystem = ParticleSystem:new()
     instance.hudManager = HUDManager:new()
@@ -57,7 +66,7 @@ function GameplayState:new()
         screenShakeIntensity = 0,
         screenShakeDecay = 0.8,
         lastShakeTime = 0,
-        cameraOffset = {x = 0, y = 0}
+        cameraOffset = { x = 0, y = 0 }
     }
 
     -- Enhanced visual effects
@@ -87,10 +96,10 @@ function GameplayState:new()
 
     instance.isEnemyActionResolving = false
     instance.enemyActionDelayTimer = 0
-    instance.enemyActionDelayDuration = _G.Config.enemyTurnActionDelay
-    instance.actorWhoJustActed = nil -- To help with logging during delay
+    instance.enemyActionDelayDuration = game.config.enemyTurnActionDelay
+    instance.actorWhoJustActed = nil                    -- To help with logging during delay
     instance.pendingBossReward_SubroutineChoice = false -- For boss reward flow
-    instance.pausedForChoice = false -- Useful later
+    instance.pausedForChoice = false                    -- Useful later
     return instance
 end
 
@@ -106,13 +115,13 @@ function GameplayState:requestSpawnEnemy(EnemyClass, x, y, nameSuffix)
         return false, nil
     end
 
-    if self.map:isWalkable(x,y) and not self.map:getEntityAt(x,y) then
-        local newEnemyNameSuffix = nameSuffix or tostring(love.math.random(100,999))
+    if self.map:isWalkable(x, y) and not self.map:getEntityAt(x, y) then
+        local newEnemyNameSuffix = nameSuffix or tostring(love.math.random(100, 999))
         local newEnemy = EnemyClass:new(x, y, newEnemyNameSuffix) -- Pass suffix to constructor
-        
+
         self.map:addEntity(newEnemy)
         table.insert(self.entities, newEnemy) -- Add to turn-taking list
-        
+
         -- If it's mid-turn, the new enemy won't act until the next full round.
         -- We might need to re-sort self.entities or adjust TurnManager if spawning should
         -- allow the new entity to act in the current round (more complex).
@@ -126,48 +135,120 @@ function GameplayState:requestSpawnEnemy(EnemyClass, x, y, nameSuffix)
         print("Spawned new enemy via request: " .. newEnemy.name)
         return true, newEnemy.name
     else
-        print("RequestSpawnEnemy: Target location ("..x..","..y..") is blocked or invalid.")
+        print("RequestSpawnEnemy: Target location (" .. x .. "," .. y .. ") is blocked or invalid.")
         return false, nil
     end
 end
 
 function GameplayState:initNewGameOrLevel(isNewRun)
     WorldInitializer.setupLevel(self, isNewRun) -- Delegate to the new module
+    if self.events then
+        self.events:emit("level_started", {
+            sector = self.currentSector,
+            floor = self.currentFloorInSector,
+            isBossLevel = self.isNextFloorBoss,
+            enemyCount = #self.entities - 1
+        })
+    end
 end
 
 function GameplayState:enter(params)
-    print(string.format("Entered GameplayState. IsInitialized (run active): %s", tostring(self.isInitialized)))
-    love.graphics.setBackgroundColor(_G.Config.activeColors.background)
+    BaseState.enter(self, params)
+
+    print(string.format("Entered GameplayState. IsInitialized %s", tostring(self.initialized)))
+    love.graphics.setBackgroundColor(self.config.activeColors.background)
+
     local forceNewRun = params and params.resetLevel
-    
+
+    -- Emit event
+    if self.events then
+        self.events:emit("gameplay_entered", {
+            isNewRun = not self.initialized or forceNewRun,
+            currentSector = self.currentSector,
+            currentFloor = self.currentFloorInSector
+        })
+    end
+
     if not self.isInitialized or forceNewRun then
         print("GameplayState:enter() - Starting a new run or forced reset.")
-        self:initNewGameOrLevel(true) 
+        self:initNewGameOrLevel(true)
     else
         print("GameplayState:enter() - Resuming current floor of existing run.")
         self.currentMode = GameplayState.Mode.PLAYER_TURN
         self.targetCursor.visible = false
         self.targetingSubroutine = nil
         self.isEnemyActionResolving = false
+
         if self.player and not self.player.actionTaken then
-             if self.turnManager then self.turnManager.isPlayerTurn = true end
+            if self.turnManager then
+                self.turnManager.isPlayerTurn = true
+            end
         end
-        if not self.gameViewport or self.gameViewport.width == 0 then self:calculateGameViewport() end
+
+        if not self.gameViewport or self.gameViewport.width == 0 then
+            self:calculateGameViewport()
+        end
+
         if self.map and self.player then
             self.map:computeFov(self.player.x, self.player.y, self.fovRadius)
-            self.cameraManager:centerOn(self.player.x, self.player.y, self.gameViewport, self.map, true)
+            self.cameraManager:centerOn(self.player.x, self.player.y,
+                self.gameViewport, self.map, true)
         end
+
         self:calculateAllEnemyIntents()
+    end
+
+    -- Listen for events from other states (optional)
+    if self.events then
+        -- Listen for subroutine events
+        self.events:on("subroutine_learned", function(data)
+            if data.message then
+                self:logMessage(data.message, self.config.activeColors.pickup)
+            end
+        end)
+        
+        self.events:on("subroutine_upgraded", function(data)
+            if data.message then
+                self:logMessage(data.message, self.config.activeColors.pickup)
+            end
+        end)
+        
+        self.events:on("subroutine_choice_cancelled", function(data)
+            if data.message then
+                self:logMessage(data.message, self.config.activeColors.text)
+            end
+        end)
+        
+        -- Listen for core mod events
+        self.events:on("core_modification_purchased", function(data)
+            if data.message then
+                self:logMessage(data.message, self.config.activeColors.pickup)
+            end
+        end)
+        
+        self.events:on("core_modification_purchase_failed", function(data)
+            if data.message then
+                self:logMessage(data.message, {1, 0.5, 0.5, 1})
+            end
+        end)
     end
 end
 
 function GameplayState:moveToNextLevel()
     self:initNewGameOrLevel(false) -- false for isNewRun
+    if self.events then
+        self.events:emit("level_completed", {
+            sector = self.currentSector,
+            floor = self.currentFloorInSector,
+            nextIsBoss = self.isNextFloorBoss,
+            totalFloorsCleared = self.totalFloorsCleared
+        })
+    end
 end
 
-function GameplayState:resume() 
+function GameplayState:resume()
     print("GameplayState:resume() called.")
-    self.currentMode = GameplayState.Mode.PLAYER_TURN 
+    self.currentMode = GameplayState.Mode.PLAYER_TURN
     self.targetCursor.visible = false
     self.targetingSubroutine = nil
     self.isEnemyActionResolving = false
@@ -177,14 +258,17 @@ function GameplayState:resume()
         self.pendingBossReward_SubroutineChoice = false
         -- isNextFloorBoss should have been determined by floor progression logic before boss fight
         _G.SFX.play("level_exit")
-        self:moveToNextLevel() 
+        self:moveToNextLevel()
     elseif self.player then
         if self.player.actionTaken then
             print("  Player action is true after choice/other sub-state, advancing turn from resume().")
             self.player:endTurnUpdate()
             self.turnManager:nextTurn()
-            if self.turnManager.isPlayerTurn then self.currentMode = GameplayState.Mode.PLAYER_TURN; self:calculateAllEnemyIntents();
-            else self.currentMode = GameplayState.Mode.ENEMY_TURN end
+            if self.turnManager.isPlayerTurn then
+                self.currentMode = GameplayState.Mode.PLAYER_TURN; self:calculateAllEnemyIntents();
+            else
+                self.currentMode = GameplayState.Mode.ENEMY_TURN
+            end
             if self.player.isDead then self:triggerGameOver("PID_PLAYER TERMINATED.") end
         else
             self.player.actionTaken = false
@@ -196,14 +280,17 @@ function GameplayState:resume()
         self.map:computeFov(self.player.x, self.player.y, self.fovRadius)
         self.cameraManager:centerOn(self.player.x, self.player.y, self.gameViewport, self.map, true)
     end
-    print(string.format("Resumed Gameplay from sub-state. Mode: %s, Player ActionTaken: %s, TM.isPlayerTurn: %s, EnemyResolving: %s", 
-        self.currentMode, 
-        tostring(self.player and self.player.actionTaken), 
-        tostring(self.turnManager and self.turnManager.isPlayerTurn), 
+    print(string.format(
+        "Resumed Gameplay from sub-state. Mode: %s, Player ActionTaken: %s, TM.isPlayerTurn: %s, EnemyResolving: %s",
+        self.currentMode,
+        tostring(self.player and self.player.actionTaken),
+        tostring(self.turnManager and self.turnManager.isPlayerTurn),
         tostring(self.isEnemyActionResolving)))
 end
 
 function GameplayState:startTargeting(subroutineInstance)
+    local config = self.config
+
     if not subroutineInstance then return end
 
     local effectData, _ = subroutineInstance:getCurrentEffectData()
@@ -216,7 +303,7 @@ function GameplayState:startTargeting(subroutineInstance)
         self.currentMode = GameplayState.Mode.TARGETING
         self:logMessage(
             "TARGETING MODE: Use arrows to aim " .. subroutineInstance:getName() .. ". ENTER to fire, ESC to cancel.",
-            _G.Config.activeColors.accent)
+            config.activeColors.accent)
     else
         -- For self-cast or player-centered AoE, activate immediately
         self:activateSubroutine(subroutineInstance, nil) -- No specific target for these types
@@ -225,6 +312,8 @@ end
 
 function GameplayState:activateSubroutine(subroutineInstance, targetEntity)
     if not self.player or not subroutineInstance then return end
+
+    local config = self.config
 
     local can, reason = subroutineInstance:canActivate(self.player)
     if not can then
@@ -248,38 +337,38 @@ function GameplayState:activateSubroutine(subroutineInstance, targetEntity)
 
     -- Add visual effects for subroutine activation
     if self.animationManager and activated then
-        local playerScreenX = self.player.x * _G.Config.spriteSize + _G.Config.spriteSize/2
-        local playerScreenY = self.player.y * _G.Config.spriteSize + _G.Config.spriteSize/2
-        
+        local playerScreenX = self.player.x * config.spriteSize + config.spriteSize / 2
+        local playerScreenY = self.player.y * config.spriteSize + config.spriteSize / 2
+
         -- Convert to screen coordinates
         if self.gameViewport then
             playerScreenX = playerScreenX + self.gameViewport.x
             playerScreenY = playerScreenY + self.gameViewport.y
         end
-        
+
         -- Subroutine activation pulse
-        local subColor = _G.Config.activeColors.accent
+        local subColor = config.activeColors.accent
         if subroutineInstance.definition.type == "OFFENSIVE" then
-            subColor = {1, 0.5, 0.2, 1}
+            subColor = { 1, 0.5, 0.2, 1 }
         elseif subroutineInstance.definition.type == "DEFENSIVE" then
-            subColor = {0.2, 0.7, 1, 1}
+            subColor = { 0.2, 0.7, 1, 1 }
         end
-        
+
         self.animationManager:addPulseEffect(playerScreenX, playerScreenY, 40, subColor, 0.6)
-        
+
         -- Connect player to target with particle trail
         if targetEntity and targetEntity ~= self.player then
-            local targetScreenX = targetEntity.x * _G.Config.spriteSize + _G.Config.spriteSize/2
-            local targetScreenY = targetEntity.y * _G.Config.spriteSize + _G.Config.spriteSize/2
-            
+            local targetScreenX = targetEntity.x * config.spriteSize + config.spriteSize / 2
+            local targetScreenY = targetEntity.y * config.spriteSize + config.spriteSize / 2
+
             if self.gameViewport then
                 targetScreenX = targetScreenX + self.gameViewport.x
                 targetScreenY = targetScreenY + self.gameViewport.y
             end
-            
-            self.animationManager:addParticleTrail(playerScreenX, playerScreenY, 
-                                                 targetScreenX, targetScreenY, 
-                                                 8, subColor, 0.4)
+
+            self.animationManager:addParticleTrail(playerScreenX, playerScreenY,
+                targetScreenX, targetScreenY,
+                8, subColor, 0.4)
         end
     end
 
@@ -307,10 +396,12 @@ function GameplayState:activateSubroutine(subroutineInstance, targetEntity)
 end
 
 function GameplayState:cancelTargeting()
+    local config = self.config
+
     self:logMessage(
         "Targeting cancelled for " ..
         (self.targetingSubroutine and self.targetingSubroutine:getName() or "subroutine") .. ".",
-        _G.Config.activeColors.text)
+        config.activeColors.text)
     self.targetingSubroutine = nil
     self.targetCursor.visible = false
     self.currentMode = GameplayState.Mode.PLAYER_TURN
@@ -318,22 +409,28 @@ function GameplayState:cancelTargeting()
 end
 
 function GameplayState:startLooking()
+    local config = self.config
+
     if self.currentMode ~= GameplayState.Mode.PLAYER_TURN then return end -- Can only look on your turn
 
     self.currentMode = GameplayState.Mode.LOOKING
     self.lookCursor.x = self.player.x
     self.lookCursor.y = self.player.y
     self.lookCursor.visible = true
-    self:logMessage("LOOK MODE: Use arrows to move cursor. ESC or X to exit.", _G.Config.activeColors.accent)
+    self:logMessage("LOOK MODE: Use arrows to move cursor. ESC or X to exit.", config.activeColors.accent)
 end
 
 function GameplayState:cancelLooking()
+    local config = self.config
+
     self.lookCursor.visible = false
     self.currentMode = GameplayState.Mode.PLAYER_TURN
-    self:logMessage("Exited Look Mode.", _G.Config.activeColors.text)
+    self:logMessage("Exited Look Mode.", config.activeColors.text)
 end
 
 function GameplayState:logMessage(msg, color)
+    local config = self.config
+
     if msg == nil then
         print("ERROR: logMessage called with nil message!")
         msg = "[SYSTEM] Error: Logged nil message." -- Provide a fallback string
@@ -342,13 +439,17 @@ function GameplayState:logMessage(msg, color)
         msg = "[SYSTEM] Error: Logged non-string: " .. tostring(msg) -- Convert to string
     end
 
-    table.insert(self.gameMessageLog, 1, {text = msg, color = color or _G.Config.activeColors.text, time = love.timer.getTime()})
-    if #self.gameMessageLog > _G.Config.logMessageCount then
+    table.insert(self.gameMessageLog, 1,
+        { text = msg, color = color or config.activeColors.text, time = love.timer.getTime() })
+    if #self.gameMessageLog > config.logMessageCount then
         table.remove(self.gameMessageLog) -- Removes the oldest, which is at the end now
     end
 end
 
 function GameplayState:checkForPickups(x, y)
+    local config = self.config
+    local fonts = self.resources:getFonts()
+
     print("checkForPickups called for x=" .. x .. ", y=" .. y) -- DEBUG
     local entityOnTile = self.map:getEntityAt(x, y)
 
@@ -385,34 +486,41 @@ function GameplayState:checkForPickups(x, y)
         print("Processing pickup: " .. entityOnTile.name .. ", type: " .. entityOnTile.pickupType) -- DEBUG
         if entityOnTile.pickupType == "SUBROUTINE_CACHE" then
             _G.SFX.play("pickup_subroutine_cache")
-            self:logMessage("Found a SUBROUTINE_CACHE!", _G.Config.activeColors.pickup)
+            self:logMessage("Found a SUBROUTINE_CACHE!", config.activeColors.pickup)
             self.map:removeEntity(entityOnTile)
             self.pausedForChoice = true
-            GameStateManager.switch("subroutine_choice", self.player)
+            self.stateManager:switch("subroutine_choice", self.player)
             return true
         elseif entityOnTile.pickupType == "DATA_FRAGMENT" then
             local value = entityOnTile.data.value or 10
             self.player.dataFragments = self.player.dataFragments + value
             _G.SFX.play("pickup_data_fragment")
             self:logMessage(string.format("Collected DATA_FRAGMENT (%d). Total: %d", value, self.player.dataFragments),
-                _G.Config.activeColors.pickup)
+                config.activeColors.pickup)
             self.map:removeEntity(entityOnTile)
             return true
         elseif entityOnTile.pickupType == "REPAIR_NANITES" then
             local healAmount = entityOnTile.data.value
             self.player.hp = math.min(self.player.maxHp, self.player.hp + healAmount)
             _G.SFX.play("pickup_health")
-            self:logMessage(string.format("Repaired %d INTEGRITY by Nanites.", healAmount), _G.Config.activeColors.player)
+            self:logMessage(string.format("Repaired %d INTEGRITY by Nanites.", healAmount), config.activeColors.player)
             self.map:removeEntity(entityOnTile)
-            if ParticleFX then ParticleFX.spawnFloatingText(self, "+"..healAmount.." HP", self.player.x, self.player.y, {color=_G.Config.activeColors.player}) end
+            if ParticleFX then
+                ParticleFX.spawnFloatingText(self, "+" .. healAmount .. " HP", self.player.x,
+                    self.player.y, { color = config.activeColors.player })
+            end
             return true
         elseif entityOnTile.pickupType == "ENERGY_CELL" then
             local cpuAmount = entityOnTile.data.value
             self.player.cpuCycles = math.min(self.player.maxCPUCycles, self.player.cpuCycles + cpuAmount)
             _G.SFX.play("pickup_cpu")
-            self:logMessage(string.format("Restored %d CPU_CYCLES from Energy Cell.", cpuAmount), _G.Config.activeColors.player)
+            self:logMessage(string.format("Restored %d CPU_CYCLES from Energy Cell.", cpuAmount),
+                config.activeColors.player)
             self.map:removeEntity(entityOnTile)
-            if ParticleFX then ParticleFX.spawnFloatingText(self, "+"..cpuAmount.." CPU", self.player.x, self.player.y, {color={0.4,0.7,1,1}}) end
+            if ParticleFX then
+                ParticleFX.spawnFloatingText(self, "+" .. cpuAmount .. " CPU", self.player.x,
+                    self.player.y, { color = { 0.4, 0.7, 1, 1 } })
+            end
             return true
         end
     else
@@ -426,12 +534,14 @@ function GameplayState:checkForPickups(x, y)
 end
 
 function GameplayState:tryActivateSubroutine(slotIndex)
+    local config = self.config
+
     if self.player.actionTaken then
         self:logMessage("Cannot use subroutine: Action already taken this turn.", { 1, 1, 0.5, 1 })
         return
     end
     if not self.player.subroutines[slotIndex] then
-        self:logMessage("No subroutine in slot " .. slotIndex .. ".", _G.Config.activeColors.text)
+        self:logMessage("No subroutine in slot " .. slotIndex .. ".", config.activeColors.text)
         return
     end
 
@@ -458,7 +568,7 @@ function GameplayState:_updateAnimations(dt)
     if self.animationManager then
         self.animationManager:update(dt)
     end
-    
+
     -- Update map animations
     if self.map then
         if self.map.updateAnimations then
@@ -469,17 +579,17 @@ function GameplayState:_updateAnimations(dt)
             self.map:addCorruptionEffects(self.systemCorruption:getCorruptionPercent())
         end
     end
-    
+
     -- Update weather effects
     self:updateWeatherEffects(dt)
-    
+
     -- Update background effects
     self:updateBackgroundEffects(dt)
 end
 
 function GameplayState:updateWeatherEffects(dt)
     local corruptionLevel = self.systemCorruption:getCorruptionPercent()
-    
+
     -- Determine weather type based on corruption
     if corruptionLevel < 20 then
         self.weatherEffects.type = "none"
@@ -494,7 +604,7 @@ function GameplayState:updateWeatherEffects(dt)
         self.weatherEffects.type = "glitch_cascade"
         self.weatherEffects.intensity = math.min(1.0, corruptionLevel / 100)
     end
-    
+
     -- Update weather particles
     if self.weatherEffects.type ~= "none" then
         -- Add new particles
@@ -510,14 +620,14 @@ function GameplayState:updateWeatherEffects(dt)
                 color = self:getWeatherColor()
             })
         end
-        
+
         -- Update existing particles
         for i = #self.weatherEffects.particles, 1, -1 do
             local p = self.weatherEffects.particles[i]
             p.x = p.x + p.vx * dt
             p.y = p.y + p.vy * dt
             p.life = p.life - dt
-            
+
             if p.life <= 0 or p.y > self.gameViewport.height + 50 then
                 table.remove(self.weatherEffects.particles, i)
             end
@@ -527,24 +637,24 @@ end
 
 function GameplayState:getWeatherChar()
     if self.weatherEffects.type == "digital_rain" then
-        return Helpers.choice({"0", "1", "|", "!", "."})
+        return Helpers.choice({ "0", "1", "|", "!", "." })
     elseif self.weatherEffects.type == "data_storm" then
-        return Helpers.choice({"▓", "▒", "░", "█", "▄", "▀"})
+        return Helpers.choice({ "▓", "▒", "░", "█", "▄", "▀" })
     elseif self.weatherEffects.type == "glitch_cascade" then
-        return Helpers.choice({"@", "#", "%", "&", "*", "~", "^"})
+        return Helpers.choice({ "@", "#", "%", "&", "*", "~", "^" })
     end
     return "·"
 end
 
 function GameplayState:getWeatherColor()
     if self.weatherEffects.type == "digital_rain" then
-        return {0.3, 1, 0.3, love.math.random(0.3, 0.8)}
+        return { 0.3, 1, 0.3, love.math.random(0.3, 0.8) }
     elseif self.weatherEffects.type == "data_storm" then
-        return {0.8, 0.3, 1, love.math.random(0.4, 0.9)}
+        return { 0.8, 0.3, 1, love.math.random(0.4, 0.9) }
     elseif self.weatherEffects.type == "glitch_cascade" then
-        return {love.math.random(0.5, 1), love.math.random(0.2, 0.8), love.math.random(0.3, 1), love.math.random(0.6, 1)}
+        return { love.math.random(0.5, 1), love.math.random(0.2, 0.8), love.math.random(0.3, 1), love.math.random(0.6, 1) }
     end
-    return {1, 1, 1, 0.5}
+    return { 1, 1, 1, 0.5 }
 end
 
 function GameplayState:updateBackgroundEffects(dt)
@@ -556,11 +666,11 @@ function GameplayState:updateBackgroundEffects(dt)
             table.insert(self.backgroundEffects, {
                 type = "health_warning",
                 intensity = pulse * (1 - healthPercent),
-                color = {1, 0.2, 0.2, pulse * 0.3}
+                color = { 1, 0.2, 0.2, pulse * 0.3 }
             })
         end
     end
-    
+
     -- System corruption background distortion
     local corruptionLevel = self.systemCorruption:getCorruptionPercent()
     if corruptionLevel > 40 then
@@ -568,24 +678,50 @@ function GameplayState:updateBackgroundEffects(dt)
         table.insert(self.backgroundEffects, {
             type = "corruption_distortion",
             intensity = distortion,
-            color = {0.8, 0.2, 0.8, distortion * 0.4}
+            color = { 0.8, 0.2, 0.8, distortion * 0.4 }
         })
     end
-    
+
     -- Clear old effects
     self.backgroundEffects = {}
 end
 
 function GameplayState:update(dt)
-    if self.gameOver then return end
-    if not self.turnManager or not self.player then return end
+    BaseState.update(self, dt)
 
-    --self:updateCamera(dt)
-    self.cameraManager:update(dt, self.player, self.gameViewport, self.map)
-    self.particleSystem:update(dt)
-    self.systemCorruption:update(dt)
+    local config = self.config
+
+    if self.paused then return end
+
+    if not self.map or not self.player or self.gameOver then
+        return
+    end
+
+    -- Update animation time
+    self.uiAnimationTime = self.uiAnimationTime + dt
+
+    -- Update all managers
+    if self.particleSystem then
+        self.particleSystem:update(dt)
+    end
+
+    if self.animationManager then
+        self.animationManager:update(dt)
+    end
+
+    if self.systemCorruption then
+        self.systemCorruption:update(dt)
+    end
+
+    if self.cameraManager then
+        self.cameraManager:update(dt, self.player, self.gameViewport, self.map)
+    end
+
+    if self.hudManager then
+        self.hudManager:update(dt)
+    end
+
     self:_updateAnimations(dt)
-    self.hudManager:update(dt)
 
     if self.player.isDead then
         self:triggerGameOver("PID_PLAYER TERMINATED.")
@@ -655,7 +791,7 @@ function GameplayState:update(dt)
         self.logTimer = 0
         local currentTime = love.timer.getTime()
         for i = #self.gameMessageLog, 1, -1 do
-            if currentTime - self.gameMessageLog[i].time > _G.Config.logMessageDuration then
+            if currentTime - self.gameMessageLog[i].time > config.logMessageDuration then
                 table.remove(self.gameMessageLog, i)
             end
         end
@@ -672,52 +808,56 @@ function GameplayState:triggerScreenShake(intensity)
     end
 end
 
-function GameplayState:centerCameraOnPlayer(instant) -- Removed viewportChanged argument
+function GameplayState:centerCameraOnPlayer(instant)
     if not (self.player and self.map and self.cameraManager and self.viewportInitialized) then
         print("centerCameraOnPlayer: Missing player, map, cameraManager, or viewport not initialized.")
         return
     end
     -- DO NOT call calculateGameViewport from here.
     self.cameraManager:centerOn(self.player.x, self.player.y, self.gameViewport, self.map, instant)
-    print(string.format("Camera centered on player (%d,%d) with instant=%s", self.player.x, self.player.y, tostring(instant)))
+    print(string.format("Camera centered on player (%d,%d) with instant=%s", self.player.x, self.player.y,
+        tostring(instant)))
 end
 
 function GameplayState:showDamageEffect(entity, damage, damageType)
     if not self.animationManager or not entity then return end
-    
-    local screenX = (entity.animX or entity.x) * _G.Config.spriteSize + _G.Config.spriteSize/2
-    local screenY = (entity.animY or entity.y) * _G.Config.spriteSize + _G.Config.spriteSize/2
-    
+
+    local config = self.config
+    local fonts = self.resources:getFonts()
+
+    local screenX = (entity.animX or entity.x) * config.spriteSize + config.spriteSize / 2
+    local screenY = (entity.animY or entity.y) * config.spriteSize + config.spriteSize / 2
+
     -- Convert to screen coordinates if needed
     if self.gameViewport then
         screenX = screenX + self.gameViewport.x
         screenY = screenY + self.gameViewport.y
     end
-    
-    local color = {1, 0.3, 0.3, 1}
+
+    local color = { 1, 0.3, 0.3, 1 }
     local text = "-" .. damage
-    
+
     if damageType == "heal" then
-        color = {0.3, 1, 0.3, 1}
+        color = { 0.3, 1, 0.3, 1 }
         text = "+" .. damage
     elseif damageType == "shield" then
-        color = {0.3, 0.7, 1, 1}
+        color = { 0.3, 0.7, 1, 1 }
         text = "BLOCKED"
     elseif damageType == "critical" then
-        color = {1, 0.8, 0.2, 1}
+        color = { 1, 0.8, 0.2, 1 }
         text = "CRIT! -" .. damage
         self.animationManager:addScreenShake(8, 0.4)
     end
-    
-    self.animationManager:addFloatingText(text, screenX, screenY, color, _G.Fonts.medium, {
+
+    self.animationManager:addFloatingText(text, screenX, screenY, color, fonts.medium, {
         vy = -80,
         duration = 1.5,
         gravity = 30
     })
-    
+
     -- Add impact effect
     self.animationManager:addPulseEffect(screenX, screenY, 30, color, 0.5)
-    
+
     -- Screen flash for significant damage
     if damage > (entity.maxHp or 100) * 0.3 then
         self.animationManager:addFlashEffect(color, 0.4, 0.2)
@@ -742,8 +882,11 @@ function GameplayState:calculateAllEnemyIntents()
 end
 
 function GameplayState:drawGameOver()
+    local config = self.config
+    local fonts = self.resources:getFonts()
+
     local screenW, screenH = love.graphics.getDimensions()
-    
+
     -- Animated overlay
     local pulseAlpha = 0.6 + 0.1 * math.sin(love.timer.getTime() * 2)
     love.graphics.setColor(0.8, 0.1, 0.1, pulseAlpha)
@@ -752,32 +895,37 @@ function GameplayState:drawGameOver()
     -- Main game over panel
     local panelW, panelH = 400, 200
     local panelX, panelY = (screenW - panelW) / 2, (screenH - panelH) / 2
-    
+
     UIHelpers.drawPanel(panelX, panelY, panelW, panelH, "SYSTEM_FAILURE", "highlighted")
 
     -- Game over text with glow
-    UIHelpers.drawTextWithGlow("PROCESS TERMINATED", panelX + panelW/2, panelY + panelH/2 - 20, 
-                               _G.Fonts.large, _G.Config.activeColors.highlight, "center")
-    
-    UIHelpers.drawTextWithGlow(self.gameOverMessage, panelX + panelW/2, panelY + panelH/2 + 10, 
-                               _G.Fonts.medium, _G.Config.activeColors.text, "center")
-    
-    UIHelpers.drawTextWithGlow("Press ENTER to return to Main Menu", panelX + panelW/2, panelY + panelH/2 + 40, 
-                               _G.Fonts.small, _G.Config.activeColors.ui_text_dim, "center")
+    UIHelpers.drawTextWithGlow("PROCESS TERMINATED", panelX + panelW / 2, panelY + panelH / 2 - 20,
+        fonts.large, config.activeColors.highlight, "center")
+
+    UIHelpers.drawTextWithGlow(self.gameOverMessage, panelX + panelW / 2, panelY + panelH / 2 + 10,
+        fonts.medium, config.activeColors.text, "center")
+
+    UIHelpers.drawTextWithGlow("Press ENTER to return to Main Menu", panelX + panelW / 2, panelY + panelH / 2 + 40,
+        fonts.small, config.activeColors.ui_text_dim, "center")
 end
 
 function GameplayState:draw()
+    if not self.visible then return end
+
+    BaseState.draw(self)
+
     if not self.map or not self.player then
         love.graphics.print("Initializing level...", 100, 100)
         return
     end
-    
-    -- Draw background effects first
+
+    -- Draw background effects
     self:drawBackgroundEffects()
-    
+
     -- === Game World Drawing ===
-    love.graphics.setScissor(self.gameViewport.x, self.gameViewport.y, self.gameViewport.width, self.gameViewport.height)
-    
+    love.graphics.setScissor(self.gameViewport.x, self.gameViewport.y,
+        self.gameViewport.width, self.gameViewport.height)
+
     -- Get camera offsets with shake
     local mapDrawX, mapDrawY = self.cameraManager:getDrawOffsets()
     if self.animationManager then
@@ -785,62 +933,65 @@ function GameplayState:draw()
         mapDrawX = mapDrawX + shakeX
         mapDrawY = mapDrawY + shakeY
     end
-    
+
     love.graphics.push()
     love.graphics.translate(self.gameViewport.x, self.gameViewport.y)
-    
-    -- Draw map with animations
+
+    -- Draw map with FOV
     if self.map.drawWithFov then
-        self.map:drawWithFov(mapDrawX, mapDrawY, _G.Config.spriteSize, self.player.x, self.player.y, self.fovRadius)
+        self.map:drawWithFov(mapDrawX, mapDrawY, self.config.spriteSize,
+            self.player.x, self.player.y, self.fovRadius)
     else
         -- Fallback to regular drawing
-        self.map:draw(mapDrawX, mapDrawY, _G.Config.spriteSize)
+        self.map:draw(mapDrawX, mapDrawY, self.config.spriteSize)
     end
-    
+
     -- Draw particle system
     if self.particleSystem then
         self.particleSystem:draw(mapDrawX, mapDrawY)
     end
-    
+
     -- Draw weather effects
     self:drawWeatherEffects(mapDrawX, mapDrawY)
-    
+
     -- Draw enemy intents with animations
     if self.currentMode == GameplayState.Mode.PLAYER_TURN or self.currentMode == GameplayState.Mode.TARGETING then
         for _, entity in ipairs(self.entities) do
-            if entity ~= self.player and 
-               not entity.isDead and 
-               entity.plannedAction and 
-               self.map:isInFov(entity.x, entity.y) then
+            if entity ~= self.player and
+                not entity.isDead and
+                entity.plannedAction and
+                self.map:isInFov(entity.x, entity.y) then
                 self:drawAnimatedEnemyIntent(entity, mapDrawX, mapDrawY)
             end
         end
     end
 
-    -- Draw cursors with enhanced animations
+    -- Draw cursors
     if self.currentMode == GameplayState.Mode.LOOKING and self.lookCursor.visible then
-        self:drawAnimatedCursor(self.lookCursor, mapDrawX, mapDrawY, {0.3, 0.9, 0.9, 0.8}, "SCAN")
+        self:drawAnimatedCursor(self.lookCursor, mapDrawX, mapDrawY,
+            { 0.3, 0.9, 0.9, 0.8 }, "SCAN")
     end
 
     if self.currentMode == GameplayState.Mode.TARGETING and self.targetCursor.visible then
-        self:drawAnimatedCursor(self.targetCursor, mapDrawX, mapDrawY, {1.0, 0.3, 0.3, 0.8}, "TARGET")
-        self:drawEnhancedTargetingUI(mapDrawX, mapDrawY, _G.Config.spriteSize)
+        self:drawAnimatedCursor(self.targetCursor, mapDrawX, mapDrawY, { 1.0, 0.3, 0.3, 0.8 }, "TARGET")
+        self:drawEnhancedTargetingUI(mapDrawX, mapDrawY, self.config.spriteSize)
     end
-    
+
     love.graphics.pop()
     love.graphics.setScissor()
-    
-    -- Draw global animation effects
+
+    -- Draw animation effects
     if self.animationManager then
         self.animationManager:draw()
     end
-    
-    -- === UI Drawing ===
+
+    -- =Draw HUD
     if self.hudManager then
         self.hudManager:draw(
             self.player, self.map, self.turnManager, self.gameMessageLog,
-            self.currentMode, self.lookCursor, self.targetCursor, self.targetingSubroutine,
-            self.currentSector, self.currentFloorInSector, self.systemCorruption:getCorruptionPercent()
+            self.currentMode, self.lookCursor, self.targetCursor,
+            self.targetingSubroutine, self.currentSector, self.currentFloorInSector,
+            self.systemCorruption:getCorruptionPercent()
         )
     end
 
@@ -862,9 +1013,11 @@ function GameplayState:drawBackgroundEffects()
 end
 
 function GameplayState:drawWeatherEffects(offsetX, offsetY)
+    local fonts = self.resources:getFonts()
+
     if #self.weatherEffects.particles == 0 then return end
-    
-    love.graphics.setFont(_G.Fonts.small)
+
+    love.graphics.setFont(fonts.small)
     for _, particle in ipairs(self.weatherEffects.particles) do
         love.graphics.setColor(particle.color)
         love.graphics.print(particle.char, particle.x + offsetX, particle.y + offsetY)
@@ -872,39 +1025,42 @@ function GameplayState:drawWeatherEffects(offsetX, offsetY)
 end
 
 function GameplayState:drawAnimatedCursor(cursor, mapOffsetX, mapOffsetY, color, label)
-    local cursorScreenX = mapOffsetX + (cursor.x - 1) * _G.Config.spriteSize
-    local cursorScreenY = mapOffsetY + (cursor.y - 1) * _G.Config.spriteSize
+    local config = self.config
+    local fonts = self.resources:getFonts()
+
+    local cursorScreenX = mapOffsetX + (cursor.x - 1) * config.spriteSize
+    local cursorScreenY = mapOffsetY + (cursor.y - 1) * config.spriteSize
     local time = love.timer.getTime()
-    
+
     -- Multi-layered animated cursor
     local pulseOuter = 0.8 + 0.4 * math.sin(time * 4)
     local pulseInner = 0.6 + 0.6 * math.sin(time * 6)
     local rotation = time * 2
-    
+
     -- Outer ring
     love.graphics.setColor(color[1] * pulseOuter, color[2] * pulseOuter, color[3] * pulseOuter, color[4] * 0.6)
     love.graphics.push()
-    love.graphics.translate(cursorScreenX + _G.Config.spriteSize/2, cursorScreenY + _G.Config.spriteSize/2)
+    love.graphics.translate(cursorScreenX + config.spriteSize / 2, cursorScreenY + config.spriteSize / 2)
     love.graphics.rotate(rotation)
-    love.graphics.circle("line", 0, 0, _G.Config.spriteSize/2 + 4)
+    love.graphics.circle("line", 0, 0, config.spriteSize / 2 + 4)
     love.graphics.pop()
-    
+
     -- Inner ring
     love.graphics.setColor(color[1] * pulseInner, color[2] * pulseInner, color[3] * pulseInner, color[4])
     love.graphics.push()
-    love.graphics.translate(cursorScreenX + _G.Config.spriteSize/2, cursorScreenY + _G.Config.spriteSize/2)
+    love.graphics.translate(cursorScreenX + config.spriteSize / 2, cursorScreenY + config.spriteSize / 2)
     love.graphics.rotate(-rotation * 0.7)
-    love.graphics.circle("line", 0, 0, _G.Config.spriteSize/3)
+    love.graphics.circle("line", 0, 0, config.spriteSize / 3)
     love.graphics.pop()
-    
+
     -- Corner brackets with animation
-    local cornerSize = _G.Config.spriteSize / 3
+    local cornerSize = config.spriteSize / 3
     local cornerOffset = math.sin(time * 8) * 2
-    local x, y, size = cursorScreenX - cornerOffset, cursorScreenY - cornerOffset, _G.Config.spriteSize + cornerOffset * 2
-    
+    local x, y, size = cursorScreenX - cornerOffset, cursorScreenY - cornerOffset, config.spriteSize + cornerOffset * 2
+
     love.graphics.setColor(color)
     love.graphics.setLineWidth(2)
-    
+
     -- Animated corner brackets
     love.graphics.line(x, y, x + cornerSize, y)
     love.graphics.line(x, y, x, y + cornerSize)
@@ -914,19 +1070,21 @@ function GameplayState:drawAnimatedCursor(cursor, mapOffsetX, mapOffsetY, color,
     love.graphics.line(x, y + size, x + cornerSize, y + size)
     love.graphics.line(x + size, y + size - cornerSize, x + size, y + size)
     love.graphics.line(x + size - cornerSize, y + size, x + size, y + size)
-    
+
     love.graphics.setLineWidth(1)
-    
+
     -- Animated label
     if label then
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
         local labelAlpha = 0.8 + 0.2 * math.sin(time * 3)
         love.graphics.setColor(color[1], color[2], color[3], labelAlpha)
-        love.graphics.print(label, cursorScreenX + _G.Config.spriteSize + 6, cursorScreenY - 4)
+        love.graphics.print(label, cursorScreenX + config.spriteSize + 6, cursorScreenY - 4)
     end
 end
 
 function GameplayState:drawEnhancedTargetingUI(mapWorldOffsetX, mapWorldOffsetY, visualTileSize)
+    local config = self.config
+
     local targetScreenX = mapWorldOffsetX + (self.targetCursor.x - 1) * visualTileSize
     local targetScreenY = mapWorldOffsetY + (self.targetCursor.y - 1) * visualTileSize
     local time = love.timer.getTime()
@@ -937,13 +1095,13 @@ function GameplayState:drawEnhancedTargetingUI(mapWorldOffsetX, mapWorldOffsetY,
 
     -- Enhanced line of sight indicator
     local losColor
-    local hasLOS = Helpers.hasLineOfSight(self.player.x, self.player.y, self.targetCursor.x, self.targetCursor.y, 
-                                          function(lx, ly) return not self.map:isTransparent(lx, ly) end)
-    
+    local hasLOS = Helpers.hasLineOfSight(self.player.x, self.player.y, self.targetCursor.x, self.targetCursor.y,
+        function(lx, ly) return not self.map:isTransparent(lx, ly) end)
+
     if hasLOS then
-        losColor = {0.3, 1.0, 0.8, 0.8} -- Clear LOS
+        losColor = { 0.3, 1.0, 0.8, 0.8 } -- Clear LOS
     else
-        losColor = {1.0, 0.3, 0.3, 0.8} -- Blocked LOS
+        losColor = { 1.0, 0.3, 0.3, 0.8 } -- Blocked LOS
     end
 
     local playerScreenX = mapWorldOffsetX + (self.player.x - 1) * visualTileSize + visualTileSize / 2
@@ -954,68 +1112,69 @@ function GameplayState:drawEnhancedTargetingUI(mapWorldOffsetX, mapWorldOffsetY,
     -- Multi-layered targeting line with animation
     local pulse = 0.6 + 0.4 * math.sin(time * 8)
     local lineOffset = math.sin(time * 10) * 2
-    
+
     -- Background line
     love.graphics.setColor(0, 0, 0, 0.5)
     love.graphics.setLineWidth(5)
     love.graphics.line(playerScreenX, playerScreenY, cursorCenterX, cursorCenterY)
-    
+
     -- Main targeting line with pulse
     love.graphics.setColor(losColor[1] * pulse, losColor[2] * pulse, losColor[3] * pulse, losColor[4])
     love.graphics.setLineWidth(3)
     love.graphics.line(playerScreenX + lineOffset, playerScreenY, cursorCenterX + lineOffset, cursorCenterY)
-    
+
     -- Animated energy flow along the line
-    local distance = math.sqrt((cursorCenterX - playerScreenX)^2 + (cursorCenterY - playerScreenY)^2)
+    local distance = math.sqrt((cursorCenterX - playerScreenX) ^ 2 + (cursorCenterY - playerScreenY) ^ 2)
     local flowCount = math.floor(distance / 20)
-    
+
     for i = 1, flowCount do
         local t = (i / flowCount + time * 2) % 1
         local flowX = playerScreenX + (cursorCenterX - playerScreenX) * t
         local flowY = playerScreenY + (cursorCenterY - playerScreenY) * t
-        
+
         love.graphics.setColor(losColor[1], losColor[2], losColor[3], 0.8 * (1 - t))
         love.graphics.circle("fill", flowX, flowY, 3 * (1 - t))
     end
-    
+
     love.graphics.setLineWidth(1)
 
     -- Enhanced AoE preview with ripple effects
     if effectData.targetType == "aoe_at_cursor" and aoeRadius > 0 then
-        local aoeColor = _G.Config.activeColors.highlight
-        
+        local aoeColor = config.activeColors.highlight
+
         -- Multiple ripple layers
         for layer = 1, 3 do
             local layerTime = time * 2 + layer * 0.5
             local rippleRadius = (aoeRadius + math.sin(layerTime) * 0.3) * visualTileSize
             local rippleAlpha = 0.15 + 0.1 * math.sin(layerTime * 2)
-            
+
             love.graphics.setColor(aoeColor[1], aoeColor[2], aoeColor[3], rippleAlpha)
             love.graphics.circle("line", cursorCenterX, cursorCenterY, rippleRadius)
         end
-        
+
         -- Fill area with animated pattern
         for dx = -aoeRadius, aoeRadius do
             for dy = -aoeRadius, aoeRadius do
                 if math.abs(dx) + math.abs(dy) <= aoeRadius then
                     local tileScreenX = mapWorldOffsetX + (self.targetCursor.x + dx - 1) * visualTileSize
                     local tileScreenY = mapWorldOffsetY + (self.targetCursor.y + dy - 1) * visualTileSize
-                    
-                    local distance = math.sqrt(dx*dx + dy*dy)
+
+                    local distance = math.sqrt(dx * dx + dy * dy)
                     local tilePulse = 0.2 + 0.2 * math.sin(time * 4 - distance * 0.8)
                     local tileRotation = time + distance * 0.2
-                    
+
                     love.graphics.push()
-                    love.graphics.translate(tileScreenX + visualTileSize/2, tileScreenY + visualTileSize/2)
+                    love.graphics.translate(tileScreenX + visualTileSize / 2, tileScreenY + visualTileSize / 2)
                     love.graphics.rotate(tileRotation)
                     love.graphics.setColor(aoeColor[1] * tilePulse, aoeColor[2] * tilePulse, aoeColor[3] * tilePulse, 0.3)
-                    love.graphics.rectangle("fill", -visualTileSize/2, -visualTileSize/2, visualTileSize, visualTileSize)
+                    love.graphics.rectangle("fill", -visualTileSize / 2, -visualTileSize / 2, visualTileSize,
+                        visualTileSize)
                     love.graphics.pop()
                 end
             end
         end
     end
-    
+
     -- Range indicator
     if range > 0 then
         love.graphics.setColor(losColor[1], losColor[2], losColor[3], 0.2)
@@ -1024,36 +1183,39 @@ function GameplayState:drawEnhancedTargetingUI(mapWorldOffsetX, mapWorldOffsetY,
 end
 
 function GameplayState:drawAnimatedEnemyIntent(enemy, mapOffsetX, mapOffsetY)
+    local config = self.config
+    local fonts = self.resources:getFonts()
+
     if not enemy.plannedAction then return end
 
     local action = enemy.plannedAction
     local time = love.timer.getTime()
-    local enemyScreenX = mapOffsetX + (enemy.x - 1) * _G.Config.spriteSize + _G.Config.spriteSize / 2
-    local enemyScreenY = mapOffsetY + (enemy.y - 1) * _G.Config.spriteSize + _G.Config.spriteSize / 2
-    
+    local enemyScreenX = mapOffsetX + (enemy.x - 1) * config.spriteSize + config.spriteSize / 2
+    local enemyScreenY = mapOffsetY + (enemy.y - 1) * config.spriteSize + config.spriteSize / 2
+
     -- Intent type colors
     local intentColor = { 1, 0.7, 0.3, 0.8 }
     if action.type == "attack" or action.type == "ranged_attack" then
-        intentColor = {1, 0.3, 0.3, 0.8}
+        intentColor = { 1, 0.3, 0.3, 0.8 }
     elseif action.type == "move" then
-        intentColor = {0.3, 0.8, 1, 0.8}
+        intentColor = { 0.3, 0.8, 1, 0.8 }
     elseif action.type == "buff_self" or action.type == "encrypt_ally" then
-        intentColor = {0.3, 1, 0.3, 0.8}
+        intentColor = { 0.3, 1, 0.3, 0.8 }
     end
 
     -- Animated intent indicator above enemy
-    local indicatorY = enemyScreenY - _G.Config.spriteSize - 10
+    local indicatorY = enemyScreenY - config.spriteSize - 10
     local pulse = 0.8 + 0.4 * math.sin(time * 4)
     local bounce = math.sin(time * 6) * 2
-    
+
     -- Intent background
     love.graphics.setColor(0, 0, 0, 0.7)
     love.graphics.circle("fill", enemyScreenX, indicatorY + bounce, 12)
-    
+
     -- Intent icon with pulse
     love.graphics.setColor(intentColor[1] * pulse, intentColor[2] * pulse, intentColor[3] * pulse, intentColor[4])
-    love.graphics.setFont(_G.Fonts.medium)
-    
+    love.graphics.setFont(fonts.medium)
+
     local intentIcon = "?"
     if action.type == "attack" or action.type == "ranged_attack" then
         intentIcon = "⚔"
@@ -1068,24 +1230,24 @@ function GameplayState:drawAnimatedEnemyIntent(enemy, mapOffsetX, mapOffsetY)
     elseif action.type == "leech_cpu" then
         intentIcon = "⚡"
     end
-    
+
     love.graphics.printf(intentIcon, enemyScreenX - 8, indicatorY + bounce - 8, 16, "center")
 
     -- Movement/attack target indicators
     if (action.type == "move" or action.type == "attack") and action.targetPos then
         if self.map:isInFov(action.targetPos.x, action.targetPos.y) then
-            local targetScreenX = mapOffsetX + (action.targetPos.x - 1) * _G.Config.spriteSize + _G.Config.spriteSize / 2
-            local targetScreenY = mapOffsetY + (action.targetPos.y - 1) * _G.Config.spriteSize + _G.Config.spriteSize / 2
+            local targetScreenX = mapOffsetX + (action.targetPos.x - 1) * config.spriteSize + config.spriteSize / 2
+            local targetScreenY = mapOffsetY + (action.targetPos.y - 1) * config.spriteSize + config.spriteSize / 2
 
             -- Animated connection line
             local lineAlpha = 0.4 + 0.3 * math.sin(time * 3)
             love.graphics.setColor(intentColor[1], intentColor[2], intentColor[3], lineAlpha)
             love.graphics.setLineWidth(2)
-            
+
             -- Dashed line effect
-            local distance = math.sqrt((targetScreenX - enemyScreenX)^2 + (targetScreenY - enemyScreenY)^2)
+            local distance = math.sqrt((targetScreenX - enemyScreenX) ^ 2 + (targetScreenY - enemyScreenY) ^ 2)
             local dashCount = math.floor(distance / 10)
-            
+
             for i = 0, dashCount do
                 if i % 2 == 0 then
                     local t1 = i / dashCount
@@ -1097,27 +1259,28 @@ function GameplayState:drawAnimatedEnemyIntent(enemy, mapOffsetX, mapOffsetY)
                     love.graphics.line(x1, y1, x2, y2)
                 end
             end
-            
+
             love.graphics.setLineWidth(1)
-            
+
             -- Target marker with animation
             local targetPulse = 0.7 + 0.5 * math.sin(time * 5)
-            love.graphics.setColor(intentColor[1] * targetPulse, intentColor[2] * targetPulse, intentColor[3] * targetPulse, 0.8)
-            love.graphics.circle("line", targetScreenX, targetScreenY, _G.Config.spriteSize / 3)
-            
+            love.graphics.setColor(intentColor[1] * targetPulse, intentColor[2] * targetPulse,
+                intentColor[3] * targetPulse, 0.8)
+            love.graphics.circle("line", targetScreenX, targetScreenY, config.spriteSize / 3)
+
             -- Rotating target brackets
             love.graphics.push()
             love.graphics.translate(targetScreenX, targetScreenY)
             love.graphics.rotate(time * 2)
-            local bracketSize = _G.Config.spriteSize / 4
-            love.graphics.line(-bracketSize, -bracketSize, -bracketSize/2, -bracketSize)
-            love.graphics.line(-bracketSize, -bracketSize, -bracketSize, -bracketSize/2)
-            love.graphics.line(bracketSize, -bracketSize, bracketSize/2, -bracketSize)
-            love.graphics.line(bracketSize, -bracketSize, bracketSize, -bracketSize/2)
-            love.graphics.line(-bracketSize, bracketSize, -bracketSize/2, bracketSize)
-            love.graphics.line(-bracketSize, bracketSize, -bracketSize, bracketSize/2)
-            love.graphics.line(bracketSize, bracketSize, bracketSize/2, bracketSize)
-            love.graphics.line(bracketSize, bracketSize, bracketSize, bracketSize/2)
+            local bracketSize = config.spriteSize / 4
+            love.graphics.line(-bracketSize, -bracketSize, -bracketSize / 2, -bracketSize)
+            love.graphics.line(-bracketSize, -bracketSize, -bracketSize, -bracketSize / 2)
+            love.graphics.line(bracketSize, -bracketSize, bracketSize / 2, -bracketSize)
+            love.graphics.line(bracketSize, -bracketSize, bracketSize, -bracketSize / 2)
+            love.graphics.line(-bracketSize, bracketSize, -bracketSize / 2, bracketSize)
+            love.graphics.line(-bracketSize, bracketSize, -bracketSize, bracketSize / 2)
+            love.graphics.line(bracketSize, bracketSize, bracketSize / 2, bracketSize)
+            love.graphics.line(bracketSize, bracketSize, bracketSize, bracketSize / 2)
             love.graphics.pop()
         end
     end
@@ -1126,22 +1289,23 @@ function GameplayState:drawAnimatedEnemyIntent(enemy, mapOffsetX, mapOffsetY)
     if action.aoeRadius and action.targetPos then
         local aoeAlpha = 0.2 + 0.2 * math.sin(time * 2)
         love.graphics.setColor(intentColor[1], intentColor[2], intentColor[3], aoeAlpha)
-        
+
         for dx = -action.aoeRadius, action.aoeRadius do
             for dy = -action.aoeRadius, action.aoeRadius do
                 local aoeTileX, aoeTileY = action.targetPos.x + dx, action.targetPos.y + dy
                 if self.map:isInFov(aoeTileX, aoeTileY) then
-                    local tileScreenX = mapOffsetX + (aoeTileX - 1) * _G.Config.spriteSize
-                    local tileScreenY = mapOffsetY + (aoeTileY - 1) * _G.Config.spriteSize
-                    
+                    local tileScreenX = mapOffsetX + (aoeTileX - 1) * config.spriteSize
+                    local tileScreenY = mapOffsetY + (aoeTileY - 1) * config.spriteSize
+
                     -- Animated AoE tiles
                     local tileTime = time * 3 + (dx + dy) * 0.2
                     local tileScale = 0.8 + 0.2 * math.sin(tileTime)
-                    
+
                     love.graphics.push()
-                    love.graphics.translate(tileScreenX + _G.Config.spriteSize/2, tileScreenY + _G.Config.spriteSize/2)
+                    love.graphics.translate(tileScreenX + config.spriteSize / 2, tileScreenY + config.spriteSize / 2)
                     love.graphics.scale(tileScale, tileScale)
-                    love.graphics.rectangle("fill", -_G.Config.spriteSize/2, -_G.Config.spriteSize/2, _G.Config.spriteSize, _G.Config.spriteSize)
+                    love.graphics.rectangle("fill", -config.spriteSize / 2, -config.spriteSize / 2, config.spriteSize,
+                        config.spriteSize)
                     love.graphics.pop()
                 end
             end
@@ -1150,23 +1314,27 @@ function GameplayState:drawAnimatedEnemyIntent(enemy, mapOffsetX, mapOffsetY)
 
     -- Description text with typewriter effect (for dramatic effect)
     if action.description then
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
         local textY = indicatorY - 20
         local textAlpha = 0.7 + 0.3 * math.sin(time * 2)
         love.graphics.setColor(intentColor[1], intentColor[2], intentColor[3], textAlpha)
-        
+
         -- Text background
-        local textWidth = _G.Fonts.small:getWidth(action.description)
+        local textWidth = fonts.small:getWidth(action.description)
         love.graphics.setColor(0, 0, 0, 0.6)
-        love.graphics.rectangle("fill", enemyScreenX - textWidth/2 - 4, textY - 2, textWidth + 8, _G.Fonts.small:getHeight() + 4)
-        
+        love.graphics.rectangle("fill", enemyScreenX - textWidth / 2 - 4, textY - 2, textWidth + 8,
+            fonts.small:getHeight() + 4)
+
         -- Animated text
         love.graphics.setColor(intentColor[1] * textAlpha, intentColor[2] * textAlpha, intentColor[3] * textAlpha, 1)
-        love.graphics.printf(action.description, enemyScreenX - textWidth/2, textY, textWidth, "center")
+        love.graphics.printf(action.description, enemyScreenX - textWidth / 2, textY, textWidth, "center")
     end
 end
 
 function GameplayState:removeDeadEntities()
+    local config = self.config
+    local fonts = self.resources:getFonts()
+
     local entitiesToKeep = {}
     local mapEntitiesToKeep = {}
 
@@ -1175,19 +1343,19 @@ function GameplayState:removeDeadEntities()
             table.insert(entitiesToKeep, entity)
         elseif entity.isDead and self.animationManager then
             -- Trigger death animation effects
-            local screenX = entity.x * _G.Config.spriteSize + _G.Config.spriteSize/2
-            local screenY = entity.y * _G.Config.spriteSize + _G.Config.spriteSize/2
-            
+            local screenX = entity.x * config.spriteSize + config.spriteSize / 2
+            local screenY = entity.y * config.spriteSize + config.spriteSize / 2
+
             if self.gameViewport then
                 screenX = screenX + self.gameViewport.x
                 screenY = screenY + self.gameViewport.y
             end
-            
-            self.animationManager:addPulseEffect(screenX, screenY, 40, {1, 0.5, 0.5, 1}, 1.0)
-            self.animationManager:addFloatingText("ELIMINATED", screenX, screenY, {1, 0.8, 0.2, 1}, _G.Fonts.small)
+
+            self.animationManager:addPulseEffect(screenX, screenY, 40, { 1, 0.5, 0.5, 1 }, 1.0)
+            self.animationManager:addFloatingText("ELIMINATED", screenX, screenY, { 1, 0.8, 0.2, 1 }, fonts.small)
         end
     end
-    
+
     self.entities = entitiesToKeep
 
     -- Handle map entities (keep corpses for visual effect)
@@ -1198,7 +1366,7 @@ function GameplayState:removeDeadEntities()
             table.insert(mapEntitiesToKeep, entity)
         end
     end
-    
+
     if self.player.isDead then
         local playerFoundInMapEntities = false
         for _, e in ipairs(mapEntitiesToKeep) do
@@ -1207,8 +1375,8 @@ function GameplayState:removeDeadEntities()
                 break
             end
         end
-        if not playerFoundInMapEntities then 
-            table.insert(mapEntitiesToKeep, self.player) 
+        if not playerFoundInMapEntities then
+            table.insert(mapEntitiesToKeep, self.player)
         end
     end
 
@@ -1223,28 +1391,52 @@ function GameplayState:triggerGameOver(message)
     self.gameOverMessage = message or "SYSTEM FAILURE."
     self:logMessage(self.gameOverMessage, { 1, 0, 0, 1 })
     print("GAME OVER: " .. self.gameOverMessage)
+    if self.events then
+        self.events:emit("game_over", {
+            reason = message,
+            sector = self.currentSector,
+            floor = self.currentFloorInSector,
+            totalFloorsCleared = self.totalFloorsCleared,
+            finalStats = {
+                hp = self.player.hp,
+                maxHp = self.player.maxHp,
+                dataFragments = self.player.dataFragments
+            }
+        })
+    end
 end
 
 function GameplayState:triggerBossDefeatedRewards()
+    local config = self.config
     print("Boss defeated! Granting major rewards.")
-    self:logMessage("SECTOR " .. self.currentSector .. " GUARDIAN DEFEATED!", _G.Config.activeColors.highlight)
+    self:logMessage("SECTOR " .. self.currentSector .. " GUARDIAN DEFEATED!", config.activeColors.highlight)
 
     -- 1. Full Heal & CPU Restore
     self.player.hp = self.player.maxHp
     self.player.cpuCycles = self.player.maxCPUCycles
-    self:logMessage("Integrity and CPU Cycles fully restored.", _G.Config.activeColors.player)
+    self:logMessage("Integrity and CPU Cycles fully restored.", config.activeColors.player)
 
     -- 2. Significant DATA_FRAGMENTS
     local fragmentReward = 100 + self.currentSector * 50
     self.player.dataFragments = self.player.dataFragments + fragmentReward
-    self:logMessage("Acquired " .. fragmentReward .. " DATA_FRAGMENTS from Guardian core.", _G.Config.activeColors.pickup)
+    self:logMessage("Acquired " .. fragmentReward .. " DATA_FRAGMENTS from Guardian core.", config.activeColors
+        .pickup)
 
     -- 3. Guaranteed Subroutine Cache Choice
     -- For now, let's directly switch to SubroutineChoiceState.
     -- A more elaborate system might have a dedicated "Boss Reward State"
     -- that then leads to subroutine choice.
     self.pendingBossReward_SubroutineChoice = true -- Set flag
-    GameState.switch("subroutine_choice", self.player)
+
+    -- Emit event
+    if self.events then
+        self.events:emit("boss_defeated", {
+            sector = self.currentSector,
+            floor = self.currentFloorInSector
+        })
+    end
+
+    self.stateManager:swtich("subroutine_choice", self.player)
     -- When SubroutineChoiceState returns, GameplayState:resume() or :enter() will be called.
     -- The next level (initNewLevel) will be triggered *after* the choice is made and we return to gameplay.
     -- This means the initNewLevel in keypressed for exit won't run immediately after boss.
@@ -1255,44 +1447,63 @@ function GameplayState:triggerBossDefeatedRewards()
 end
 
 function GameplayState:keypressed(key, scancode, isrepeat)
-    -- Delegate all gameplay-related key processing to the InputHandler
-    -- Pass 'self' (the GameplayState instance) as context
+    -- Emit event for input tracking
+    if self.events then
+        self.events:emit("gameplay_input", {
+            key = key,
+            mode = self.currentMode,
+            isGameOver = self.gameover
+        })
+    end
+
+    -- Delegate to InputHandler
     return InputHandler.processKey(key, scancode, isrepeat, self)
 end
 
 function GameplayState:leave()
     GlitchSwarmer.resetGlobalCount()
     print("Left GameplayState")
+
+    -- Emit event
+    if self.events then
+        self.events:emit("gameplay_left", {
+            currentSector = self.currentSector,
+            currentFloor = self.currentFloorInSector,
+            wasGameOver = self.gameOver
+        })
+    end
+
     self.gameMessageLog = {}
-    -- Any other cleanup
-    -- self.isInitialized = false; -- Uncomment if going to main menu should always mean a fresh level next time.
+
+    BaseState.leave(self)
 end
 
 function GameplayState:calculateGameViewport()
     local screenW, screenH = Config.nativeResolution.width, Config.nativeResolution.height
-    
-    if screenW == 0 or screenH == 0 then 
+
+    if screenW == 0 or screenH == 0 then
         print("[CALC_VIEWPORT] Warning: Native resolution dimensions are zero. Aborting calculation.")
         self.viewportInitialized = false
         return
     end
 
     -- Adjust these margins to be more reasonable for the 640x360 resolution
-    local topMargin = 60      -- Space for top status bar (was 20, now more reasonable)
-    local bottomMargin = 90   -- Space for bottom panels (was 40, now more for message log)
-    local leftMargin = 0      -- No left sidebar for now
-    local rightMargin = 200   -- Space for right sidebar (was 125, now 200 for better proportions)
+    local topMargin = 60    -- Space for top status bar (was 20, now more reasonable)
+    local bottomMargin = 90 -- Space for bottom panels (was 40, now more for message log)
+    local leftMargin = 0    -- No left sidebar for now
+    local rightMargin = 200 -- Space for right sidebar (was 125, now 200 for better proportions)
 
     self.gameViewport.x = leftMargin
     self.gameViewport.y = topMargin
     self.gameViewport.width = screenW - leftMargin - rightMargin
     self.gameViewport.height = screenH - topMargin - bottomMargin
-    
+
     -- Debug output to see what we're getting
     print(string.format("[CALC_VIEWPORT] Native screenW:%d, screenH:%d", screenW, screenH))
-    print(string.format("  Margins - Top:%d, Bottom:%d, Left:%d, Right:%d", topMargin, bottomMargin, leftMargin, rightMargin))
-    print(string.format("  Resulting Viewport: x=%d, y=%d, w=%d, h=%d", 
-          self.gameViewport.x, self.gameViewport.y, self.gameViewport.width, self.gameViewport.height))
+    print(string.format("  Margins - Top:%d, Bottom:%d, Left:%d, Right:%d", topMargin, bottomMargin, leftMargin,
+        rightMargin))
+    print(string.format("  Resulting Viewport: x=%d, y=%d, w=%d, h=%d",
+        self.gameViewport.x, self.gameViewport.y, self.gameViewport.width, self.gameViewport.height))
 
     -- Sanity check - ensure viewport has reasonable dimensions
     if self.gameViewport.width < 200 or self.gameViewport.height < 150 then
@@ -1302,8 +1513,8 @@ function GameplayState:calculateGameViewport()
         self.gameViewport.y = 50
         self.gameViewport.width = screenW - 180  -- Leave space for right sidebar
         self.gameViewport.height = screenH - 100 -- Leave space for top/bottom
-        print(string.format("  Adjusted Viewport: x=%d, y=%d, w=%d, h=%d", 
-              self.gameViewport.x, self.gameViewport.y, self.gameViewport.width, self.gameViewport.height))
+        print(string.format("  Adjusted Viewport: x=%d, y=%d, w=%d, h=%d",
+            self.gameViewport.x, self.gameViewport.y, self.gameViewport.width, self.gameViewport.height))
     end
 
     self.viewportInitialized = true
@@ -1311,8 +1522,8 @@ end
 
 function GameplayState:resize(w, h)
     print(string.format("GameplayState:resize(%d, %d) called.", w, h))
-    if w > 0 and h > 0 then 
-        self:calculateGameViewport() -- Calculate new viewport
+    if w > 0 and h > 0 then
+        self:calculateGameViewport()    -- Calculate new viewport
         self:centerCameraOnPlayer(true) -- Re-center camera based on new viewport
     end
 end

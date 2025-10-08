@@ -11,13 +11,6 @@ NewRunState.__index = NewRunState
 setmetatable(NewRunState, {__index = BaseState})
 
 function NewRunState:new(game)
-    -- Support both new (game object) and legacy (nil) initialization
-    game = game or {
-        config = _G.Config,
-        resources = { getFonts = function() return _G.Fonts end },
-        events = nil
-    }
-    
     local instance = BaseState.new(self, game)
     setmetatable(instance, NewRunState)
     instance.name = "NewRunState"
@@ -1103,13 +1096,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
                 love.timer.sleep(0.4)
                 
                 -- Return to gameplay using legacy bridge
-                if _G.GameState then
-                    local gameplay = _G.GameState.get("gameplay")
-                    if gameplay then 
-                        gameplay.isInitialized = false 
-                    end
-                    _G.GameState.switch("gameplay", {resetLevel = true})
-                end
+                self.stateManager:switch("gameplay", {resetLevel = true})
             end
         elseif self.selectedUIElement == "back" then
             _G.SFX.play("ui_back")
@@ -1119,10 +1106,8 @@ function NewRunState:keypressed(key, scancode, isrepeat)
                 self.events:emit("new_run_cancelled", {})
             end
             
-            -- Return to main menu using legacy bridge
-            if _G.GameState then
-                _G.GameState.switch("mainmenu")
-            end
+            -- Return to main menu
+            self.stateManager:switch("mainmenu")
         end
     elseif key == "escape" then
         _G.SFX.play("ui_back")
@@ -1133,9 +1118,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
         end
         
         -- Return to main menu using legacy bridge
-        if _G.GameState then
-            _G.GameState.switch("mainmenu")
-        end
+        self.stateManager:switch("mainmenu")
     end
 
     return true 

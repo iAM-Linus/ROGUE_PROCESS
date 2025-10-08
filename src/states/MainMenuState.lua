@@ -279,13 +279,7 @@ function MainMenuState:handleMenuSelection(selected)
         end
         
         -- Transition to new run state
-        -- For Phase 2, we'll use legacy GameState for states not yet migrated
-        if _G.GameState then
-            _G.GameState.switch("newrun")
-        else
-            -- Future: use new StateManager when all states migrated
-            self.stateManager:switch("newrun")
-        end
+        self.stateManager:switch("newrun")
         
     elseif selected == "Exit Game" then
         -- Emit exit event

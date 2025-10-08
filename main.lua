@@ -1,11 +1,7 @@
 -- main.lua
 
 -- Configuration: Set to true to use migrated states
-local USE_NEW_MAIN_MENU = true -- MainMenuState migrated
-local USE_NEW_NEWRUN = true   -- Not yet migrated
-local USE_NEW_GAMEPLAY = false -- Not yet migrated
-local USE_NEW_SUBROUTINE_CHOICE = true
-local USE_NEW_CORE_MODIFICATION = true
+local USE_LEGACY_GAMESTATE = false
 
 function love.load()
     -- Ensure src directory is in package.path for require
@@ -16,14 +12,23 @@ function love.load()
     end
 
     print("\n========================================")
-    print("//ROGUE_PROCESS - Phase 2 Initialization")
+    print("//ROGUE_PROCESS - Phase 3 Initialization")
     print("========================================\n")
 
     -- ===== EXISTING GLOBAL SYSTEMS (Legacy - Still needed) =====
     print("[Legacy] Loading existing global systems...")
 
-    _G.Config = require "src.config"
-    _G.GameState = require "src.states.GameState" -- Keep for non-migrated states
+    _G.Config = require 'src.config'
+
+    -- Legacy GameState only loaded if USE_LEGACY_GAMESTATE = true
+    if USE_LEGACY_GAMESTATE then
+        _G.GameState = require 'src.states.GameState' -- Keep for non-migrated states
+        print("Legacy GameState loaded (compatibility mode)")
+    else
+        _G.GameState = nil
+        print("Legacy Gamestate disabled")
+    end
+
     _G.CompositeShader = nil
     _G.MainSceneCanvas = nil
     _G.SpriteManager = require 'src.core.managers.SpriteManager'
@@ -79,66 +84,49 @@ function love.load()
 
     print("[Phase 2] Game singleton initialized")
 
-    -- ===== STATE REGISTRATION (Phase 2) =====
-    print("\n[Phase 2] Registering states...")
+    -- ===== STATE REGISTRATION (Phase 3) =====
+    print("\n[Phase 3] Registering states...")
 
     -- Load state classes
-    local MainMenuState_Legacy = require "src.states.MainMenuState"
+    local MainMenuState = require "src.states.MainMenuState"
     local NewRunState = require 'src.states.NewRunState'
     local GameplayState = require "src.states.GameplayState"
     local SubroutineChoiceState = require "src.states.SubroutineChoiceState"
     local CoreModificationState = require 'src.states.CoreModificationState'
 
-    -- Register with legacy GameState (for non-migrated states)
-    print("[Phase 2] Registering with legacy GameState...")
-
-    if USE_NEW_MAIN_MENU then
-        -- Use migrated MainMenuState with legacy system (temporary bridge)
-        -- This lets migrated state work with old system during transition
-        print("  - mainmenu: MIGRATED version (via legacy bridge)")
-        _G.GameState.register("mainmenu", MainMenuState_Legacy:new(_G.Game))
-    else
-        print("  - mainmenu: Legacy version")
-        _G.GameState.register("mainmenu", MainMenuState_Legacy:new())
-    end
-
-    if USE_NEW_SUBROUTINE_CHOICE then
-        print("  - subroutine_choice: MIGRATED version")
-        _G.GameState.register("subroutine_choice", SubroutineChoiceState:new(_G.Game))
-    else
-        print("  - subroutine_choice: Legacy version")
-        _G.GameState.register("subroutine_choice", SubroutineChoiceState:new())
-    end
-
-    if USE_NEW_CORE_MODIFICATION then
-        print("  - core_modification: MIGRATED version")
-        _G.GameState.register("core_modification", CoreModificationState:new(_G.Game))
-    else
-        print("  - core_modification: Legacy version")
-        _G.GameState.register("core_modification", CoreModificationState:new())
-    end
-
-    if USE_NEW_NEWRUN then
-        print("  - newrun: MIGRATED version")
+    if USE_LEGACY_GAMESTATE then
+        -- Phase 2 compatibility mode: Register with legacy GameState
+        print("[Compatibility] Registering with legacy GameState...")
+        _G.GameState.register("mainmenu", MainMenuState:new(_G.Game))
         _G.GameState.register("newrun", NewRunState:new(_G.Game))
+        _G.GameState.register("gameplay", GameplayState:new(_G.Game))
+        _G.GameState.register("subroutine_choice", SubroutineChoiceState:new(_G.Game))
+        _G.GameState.register("core_modification", CoreModificationState:new(_G.Game))
+        
+        -- Start with main menu (legacy)
+        _G.GameState.switch("mainmenu")
     else
-        print("  - newrun: Legacy version")
-        _G.GameState.register("newrun", NewRunState:new())
+        -- Phase 3: Register ONLY with new StateManager
+        print("[Phase 3] Registering with new StateManager...")
+        print("  ✓ mainmenu")
+        _G.Game.states:registerState("mainmenu", MainMenuState)
+        
+        print("  ✓ newrun")
+        _G.Game.states:registerState("newrun", NewRunState)
+        
+        print("  ✓ gameplay")
+        _G.Game.states:registerState("gameplay", GameplayState)
+        
+        print("  ✓ subroutine_choice")
+        _G.Game.states:registerState("subroutine_choice", SubroutineChoiceState)
+        
+        print("  ✓ core_modification")
+        _G.Game.states:registerState("core_modification", CoreModificationState)
+        
+        -- Start with main menu (new system)
+        print("\n[Phase 3] Starting main menu...")
+        _G.Game.states:switch("mainmenu")
     end
-
-    _G.GameState.register("gameplay", GameplayState:new())
-
-    -- Also register with new StateManager (for future use)
-    print("\n[Phase 2] Registering with new StateManager...")
-    if USE_NEW_MAIN_MENU then
-        print("  - mainmenu: MIGRATED version")
-        _G.Game.states:registerState("mainmenu", MainMenuState_Legacy)
-    end
-    -- Other states will be registered as they're migrated
-
-    -- Start with main menu
-    print("\n[Phase 2] Starting main menu...")
-    _G.GameState.switch("mainmenu")
 
     love.window.setTitle(_G.Config.windowTitle or "//ROGUE_PROCESS")
     love.graphics.setBackgroundColor(_G.Config.activeColors.background)
@@ -146,24 +134,33 @@ function love.load()
     -- Seed RNG
     love.math.setRandomSeed(os.time())
 
-    print("\n[Phase 2] Migration Status:")
-    print("  MainMenuState: " .. (USE_NEW_MAIN_MENU and "✓ MIGRATED" or "○ Legacy"))
-    print("  NewRunState: " .. (USE_NEW_NEWRUN and "✓ MIGRATED" or "○ Legacy"))
-    print("  GameplayState: " .. (USE_NEW_GAMEPLAY and "✓ MIGRATED" or "○ Legacy"))
-    print("  Other States: ○ Legacy")
+    print("\n[Phase 3] Architecture Status:")
+    if USE_LEGACY_GAMESTATE then
+        print("  ⚠️  Running in compatibility mode (Legacy + New)")
+    else
+        print("  ✓ Pure Phase 3 architecture (New StateManager only)")
+    end
+    print("  ✓ All states migrated to BaseState")
+    print("  ✓ All states using new StateManager")
+    print("  ✓ Event system active")
+    print("  ✓ Resource management centralized")
 
     print("\n========================================")
-    print("Phase 2 Initialization Complete")
-    print("========================================\n")
+    print("Phase 3 Initialization Complete")
 end
 
 function love.update(dt)
-    -- Update legacy system (currently active)
-    _G.GameState.update(dt)
-
-    -- Update new system (ready for use)
-    if _G.Game then
-        _G.Game:update(dt)
+    if USE_LEGACY_GAMESTATE then
+        -- Compatibility mode: Update both systems
+        _G.GameState.update(dt)
+        if _G.Game then
+            _G.Game:update(dt)
+        end
+    else
+        -- Phase 3: Update only new system
+        if _G.Game then
+            _G.Game:update(dt)
+        end
     end
 end
 
@@ -176,16 +173,25 @@ function love.draw()
 
     -- 1. Draw the entire game scene to MainSceneCanvas (at native resolution)
     love.graphics.setCanvas(_G.MainSceneCanvas)
-    love.graphics.clear(Config.activeColors.background[1], Config.activeColors.background[2],
-        Config.activeColors.background[3], Config.activeColors.background[4] or 1)
+    love.graphics.clear(_G.Config.activeColors.background[1], _G.Config.activeColors.background[2],
+        _G.Config.activeColors.background[3], _G.Config.activeColors.background[4] or 1)
 
-    GameState.draw()          -- All game drawing happens here, using native coordinates
+    -- Draw using appropriate system
+    if USE_LEGACY_GAMESTATE then
+        -- Compatibility mode: Use legacy GameState
+        _G.GameState.draw()
+    else
+        -- Phase 3: Use new Game/StateManager
+        if _G.Game then
+            _G.Game:draw()
+        end
+    end
 
     love.graphics.setCanvas() -- Back to screen
 
     -- 2. Calculate scale factor to draw MainSceneCanvas onto the actual window
     local screenW, screenH = love.graphics.getDimensions()
-    local canvasW, canvasH = Config.nativeResolution.width, Config.nativeResolution.height
+    local canvasW, canvasH = _G.Config.nativeResolution.width, _G.Config.nativeResolution.height
 
     -- Calculate scale to fit canvas within screen while maintaining aspect ratio
     local scaleX = screenW / canvasW
@@ -244,44 +250,55 @@ end
 --end
 
 function love.keypressed(key, scancode, isrepeat)
-    -- Handle input through legacy system (currently active)
-    local handled = _G.GameState.keypressed(key, scancode, isrepeat)
-
-    -- Also pass to new system (for debug shortcuts, etc.)
-    if _G.Game and not handled then
-        handled = _G.Game:handleInput(key, scancode, isrepeat)
+    if USE_LEGACY_GAMESTATE then
+        -- Compatibility mode: Try legacy first, then new
+        local handled = _G.GameState.keypressed(key, scancode, isrepeat)
+        if _G.Game and not handled then
+            handled = _G.Game:handleInput(key, scancode, isrepeat)
+        end
+        return handled
+    else
+        -- Phase 3: Use only new system
+        if _G.Game then
+            return _G.Game.states:handleInput(key, scancode, isrepeat)
+        end
+        return false
     end
-
-    return handled
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-    -- Legacy system
-    _G.GameState.mousepressed(x, y, button, istouch, presses)
-
-    -- New system
+    if USE_LEGACY_GAMESTATE then
+        -- Compatibility mode: Both systems
+        _G.GameState.mousepressed(x, y, button, istouch, presses)
+    end
+    
+    -- New system (in both modes)
     if _G.Game then
-        _G.Game:mousepressed(x, y, button, istouch, presses)
+        _G.Game.states:mousepressed(x, y, button, istouch, presses)
     end
 end
 
 function love.mousemoved(x, y, dx, dy, istouch)
-    -- Legacy system
-    _G.GameState.mousemoved(x, y, dx, dy, istouch)
-
-    -- New system
+    if USE_LEGACY_GAMESTATE then
+        -- Compatibility mode: Both systems
+        _G.GameState.mousemoved(x, y, dx, dy, istouch)
+    end
+    
+    -- New system (in both modes)
     if _G.Game then
-        _G.Game:mousemoved(x, y, dx, dy, istouch)
+        _G.Game.states:mousemoved(x, y, dx, dy, istouch)
     end
 end
 
 function love.resize(w, h)
-    -- Legacy system
-    _G.GameState.resize(w, h)
-
-    -- New system
+    if USE_LEGACY_GAMESTATE then
+        -- Compatibility mode: Both systems
+        _G.GameState.resize(w, h)
+    end
+    
+    -- New system (in both modes)
     if _G.Game then
-        _G.Game:resize(w, h)
+        _G.Game.states:resize(w, h)
     end
 end
 
