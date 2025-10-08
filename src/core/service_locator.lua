@@ -8,12 +8,12 @@ local serviceMetadata = {}
 local debugMode = false
 
 -- Configuration
-ServiceLocator.DEBUG = false -- Set to true for verbose logging
+ServiceLocator.DEBUG = false --- Set to true for verbose logging
 
--- Register a service with optional metadata
--- @param name string: Unique service identifier
--- @param service any: The service instance
--- @param metadata table: Optional metadata (dependencies, version, etc.)
+--- Register a service with optional metadata
+--- @param name string: Unique service identifier
+--- @param service any: The service instance
+--- @param metadata table: Optional metadata (dependencies, version, etc.)
 function ServiceLocator.register(name, service, metadata)
     assert(type(name) == "string" and #name > 0, "Service name must be a non-empty string")
     assert(service ~= nil, "Cannot register nil service: " .. name)
@@ -32,9 +32,9 @@ function ServiceLocator.register(name, service, metadata)
     end
 end
 
--- Get a registered service
--- @param name string: Service identifier
--- @return any: The service instance
+--- Get a registered service
+--- @param name string: Service identifier
+--- @return any: The service instance
 function ServiceLocator.get(name)
     local service = services[name]
 
@@ -56,22 +56,22 @@ function ServiceLocator.get(name)
     return service
 end
 
--- Check if a service is registered
--- @param name string: Service identifier
--- @return boolean: True if service exists
+--- Check if a service is registered
+--- @param name string: Service identifier
+--- @return boolean: True if service exists
 function ServiceLocator.has(name)
     return services[name] ~= nil
 end
 
--- Try to get a service, return nil if not found (safe version)
--- @param name string: Service identifier
--- @return any|nil: The service instance or nil
+--- Try to get a service, return nil if not found (safe version)
+--- @param name string: Service identifier
+--- @return any|nil: The service instance or nil
 function ServiceLocator.tryGet(name)
     return services[name]
 end
 
--- Unregister a service
--- @param name string: Service identifier
+--- Unregister a service
+--- @param name string: Service identifier
 function ServiceLocator.unregister(name)
     if services[name] then
         services[name] = nil
@@ -85,7 +85,7 @@ function ServiceLocator.unregister(name)
     end
 end
 
--- Clear all registered services
+--- Clear all registered services
 function ServiceLocator.clear()
     if ServiceLocator.DEBUG then
         print("[ServiceLocator] Clearing all services")
@@ -95,8 +95,8 @@ function ServiceLocator.clear()
     serviceMetadata = {}
 end
 
--- Get all registered service names
--- @return table: Array of service names
+--- Get all registered service names
+--- @return table: Array of service names
 function ServiceLocator.getAllServiceNames()
     local names = {}
     for name, _ in pairs(services) do
@@ -106,14 +106,14 @@ function ServiceLocator.getAllServiceNames()
     return names
 end
 
--- Get metadata for a service
--- @param name string: Service identifier
--- @return table|nil: Service metadata or nil
+--- Get metadata for a service
+--- @param name string: Service identifier
+--- @return table|nil: Service metadata or nil
 function ServiceLocator.getMetadata(name)
     return serviceMetadata[name]
 end
 
--- Print debug information about all services
+--- Print debug information about all services
 function ServiceLocator.printDebugInfo()
     print("\n=== ServiceLocator Debug Info ===")
     print(string.format("Total services registered: %d", ServiceLocator.getServiceCount()))
@@ -137,8 +137,8 @@ function ServiceLocator.printDebugInfo()
     print("=================================\n")
 end
 
--- Get count of registered services
--- @return number: Number of services
+--- Get count of registered services
+--- @return number: Number of services
 function ServiceLocator.getServiceCount()
     local count = 0
     for _ in pairs(services) do
@@ -147,9 +147,9 @@ function ServiceLocator.getServiceCount()
     return count
 end
 
--- Validate that required services are registered
--- @param requiredServices table: Array of service names
--- @return boolean, table: success, array of missing services
+--- Validate that required services are registered
+--- @param requiredServices table: Array of service names
+--- @return boolean, table: success, array of missing services
 function ServiceLocator.validateServices(requiredServices)
     local missing = {}
 
@@ -166,8 +166,8 @@ function ServiceLocator.validateServices(requiredServices)
     return true, {}
 end
 
--- Enable or disable debug mode
--- @param enabled boolean: Debug mode state
+--- Enable or disable debug mode
+--- @param enabled boolean: Debug mode state
 function ServiceLocator.setDebugMode(enabled)
     ServiceLocator.DEBUG = enabled
     print(string.format("[ServiceLocator] Debug mode: %s", enabled))

@@ -5,6 +5,7 @@ local EventDispatcher = require "src.core.event_dispatcher"
 local ResourceManager = require "src.core.resource_manager"
 local StateManager = require "src.core.state_manager"
 
+---@class Game
 local Game = {}
 Game.__index = Game
 

@@ -5,6 +5,7 @@ local USE_NEW_MAIN_MENU = true -- MainMenuState migrated
 local USE_NEW_NEWRUN = false   -- Not yet migrated
 local USE_NEW_GAMEPLAY = false -- Not yet migrated
 local USE_NEW_SUBROUTINE_CHOICE = true
+local USE_NEW_CORE_MODIFICATION = true
 
 function love.load()
     -- Ensure src directory is in package.path for require
@@ -109,9 +110,16 @@ function love.load()
         _G.GameState.register("subroutine_choice", SubroutineChoiceState:new())
     end
 
+    if USE_NEW_CORE_MODIFICATION then
+        print("  - core_modification: MIGRATED version")
+        _G.GameState.register("core_modification", CoreModificationState:new(_G.Game))
+    else
+        print("  - core_modification: Legacy version")
+        _G.GameState.register("core_modification", CoreModificationState:new())
+    end
+
     _G.GameState.register("newrun", NewRunState:new())
     _G.GameState.register("gameplay", GameplayState:new())
-    _G.GameState.register("core_modification", CoreModificationState:new())
 
     -- Also register with new StateManager (for future use)
     print("\n[Phase 2] Registering with new StateManager...")

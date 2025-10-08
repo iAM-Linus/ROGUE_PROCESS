@@ -1,6 +1,9 @@
 {
     "Lua.diagnostics.disable": [
-        "deprecated"
+        "deprecated",
+        "missing-parameter",
+        "undefined-field",
+        "undefined-doc-name"
     ],
     "Lua.diagnostics.globals": [
         "love",
