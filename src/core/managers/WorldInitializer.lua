@@ -14,7 +14,7 @@ local GlitchSwarmer = require 'src.core.enemies.GlitchSwarmer'
 local CipherSentinel = require 'src.core.enemies.CipherSentinel'
 local BitRipper = require 'src.core.enemies.BitRipper'
 local Sector1Guardian = require 'src.core.bosses.sector_1.Sector1Guardian'
-
+local EnemyAI_DB = require "src/core/ai/EnemyAI_DB"
 
 local WorldInitializer = {}
 
@@ -155,9 +155,6 @@ end
 -- Helper: Spawn Enemies (moved from GameplayState)
 function WorldInitializer.spawnEnemies(gs, numberOfEnemies)
     print(string.format("  [WorldInit - spawnEnemies] Spawning %d enemies...", numberOfEnemies))
-    -- ... (Your existing spawnEnemies logic, using 'gs' instead of 'self')
-    -- Example: local enemyX, enemyY = gs.map:getRandomFloorTile()
-    --          gs.map:addEntity(enemy); table.insert(gs.entities, enemy)
     local enemyTypes = {SentryBot, DataLeech, FirewallNode, GlitchSwarmer, CipherSentinel, BitRipper}
     local enemyWeights = {3,2,1,2,2,3} -- Example weights
     local weightedTypes = {}
@@ -169,10 +166,7 @@ function WorldInitializer.spawnEnemies(gs, numberOfEnemies)
             if not gs.map:getEntityAt(enemyX, enemyY) then
                 local EnemyClass = Helpers.choice(weightedTypes)
                 if EnemyClass then
-                    local baseName = "ENEMY"; -- Determine baseName from EnemyClass
-                    if EnemyClass == SentryBot then baseName = "SENTRY" elseif EnemyClass == DataLeech then baseName = "LEECH" elseif EnemyClass == FirewallNode then baseName = "FWNODE" elseif EnemyClass == GlitchSwarmer then baseName = "SWARMER" elseif EnemyClass == CipherSentinel then baseName = "CIPHER" elseif EnemyClass == BitRipper then baseName = "RIPPER" end
-                    local enemyFullName = baseName .. "_" .. string.format("%02d", i)
-                    local enemy = EnemyClass:new(enemyX, enemyY, enemyFullName)
+                    local enemy = EnemyClass:new(enemyX, enemyY) -- Simplified constructor call
                     gs.map:addEntity(enemy); table.insert(gs.entities, enemy); spawnedCount = spawnedCount + 1
                 end
             end
@@ -191,7 +185,7 @@ function WorldInitializer.spawnPickups(gs, numCaches, numFragments, numNanites, 
     local spawnedFragments = 0; for i=1,numFragments do local x,y=gs.map:getRandomFloorTile(); if x and y and not gs.map:getEntityAt(x,y) then gs.map:addEntity(Pickup.newDataFragment(x,y)); spawnedFragments=spawnedFragments+1 else if not x then break end end end
     local spawnedNanites = 0; for i=1,numNanites or 0 do local x,y=gs.map:getRandomFloorTile(); if x and y and not gs.map:getEntityAt(x,y) then gs.map:addEntity(Pickup.newRepairNanites(x,y)); spawnedNanites=spawnedNanites+1 else if not x then break end end end
     local spawnedCells = 0; for i=1,numCells or 0 do local x,y=gs.map:getRandomFloorTile(); if x and y and not gs.map:getEntityAt(x,y) then gs.map:addEntity(Pickup.newEnergyCell(x,y)); spawnedCells=spawnedCells+1 else if not x then break end end end
-    print(string.format("    Spawned: %d Caches, %d Frags, %d Nanites, %d Cells", spawnedCaches, spawnedFragments, spawnedNanites, spawnedCells))
+--spawnedCaches, spawnedFragments, spawnedNanites, spawnedCells))
 end
 
 

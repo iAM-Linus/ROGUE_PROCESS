@@ -1,90 +1,127 @@
 -- src/core/Enemy.lua
-local Entity = require "src.core.Entity"
-local Helpers = require "src.utils.helpers" -- For things like LOS if generalized
-
-local Enemy = {}
-Enemy.__index = Enemy
-setmetatable(Enemy, {__index = Entity}) -- Inherit from Entity
-
--- Constructor for the base Enemy
--- char, color, name, hp are specific to the enemy type
--- blocksMovement is usually true for enemies
-function Enemy:new(x, y, char_or_quadName, color_tint, name, hp, blocksMovementOverride)
-    -- Call the Entity constructor
-    -- blocksMovementOverride defaults to true if not provided by specific enemy
-    local instance = Entity:new(x, y, char_or_quadName, color_tint, name, blocksMovementOverride ~= nil and blocksMovementOverride or true, hp)
-    setmetatable(instance, Enemy) -- Set metatable to Enemy for Enemy-specific methods
-
-    instance.isEnemy = true -- Flag to easily identify enemies
-    instance.playerTarget = nil -- Will be set by GameplayState or when player is detected
-    instance.aiState = "idle" -- Common states: "idle", "patrolling", "hunting", "fleeing", "attacking"
-    
-    instance.visionRadius = 7 -- Default vision radius, can be overridden by specific enemies
-    instance.dataFragmentsValue = love.math.random(3, 8) -- Default data fragments dropped on death
-
-    -- plannedAction is already in Entity.lua from our intent system, so no need to re-declare
-    -- instance.plannedAction = nil 
-
-    return instance
-end
-
--- Common method to update the AI state based on player visibility
--- This can be called by specific enemy 'act' methods
-function Enemy:updateAiStateBasedOnPlayerVisibility(player, map, gameplayState)
-    local canSeePlayer = false
-    if Helpers.hasLineOfSight(self.x, self.y, player.x, player.y, function(lx, ly) return not map:isTransparent(lx, ly) end) then
-        local dist = Helpers.distanceEuclidean({x=self.x, y=self.y}, {x=player.x, y=player.y}) -- Using Euclidean for radius
-        if dist <= self.visionRadius then
-            canSeePlayer = true
-        end
-    end
-
-    if self.aiState == "fleeing" then
-        -- If fleeing, only stop if HP is high enough AND player is not visible or far away
-        if self.hp > (self.fleeThreshold or self.maxHp * 0.3) * 1.5 then
-            if not canSeePlayer or (canSeePlayer and Helpers.distanceEuclidean({x=self.x, y=self.y}, {x=player.x, y=player.y}) > self.visionRadius * 1.2) then
-                self.aiState = "idle" -- Or patrolling
-                gameplayState:logMessage(self.name .. " calms down.", _G.Config.activeColors.text)
+ local Entity = require "src.core.Entity"
+ local Helpers = require "src.utils.helpers" -- For things like LOS if generalized
+ 
+ local Enemy = {}
+ Enemy.__index = Enemy
+ setmetatable(Enemy, {__index = Entity}) -- Inherit from Entity
+ 
+ -- Constructor for the base Enemy
+ -- char, color, name, hp are specific to the enemy type
+ -- blocksMovement is usually true for enemies
+ function Enemy:new(x, y, char_or_quadName, color_tint, name, hp, blocksMovementOverride, aiData)
+     -- Call the Entity constructor
+     -- blocksMovementOverride defaults to true if not provided by specific enemy
+     local instance = Entity:new(x, y, char_or_quadName, color_tint, name, blocksMovementOverride ~= nil and blocksMovementOverride or true, hp)
+     setmetatable(instance, Enemy) -- Set metatable to Enemy for Enemy-specific methods
+ 
+     instance.isEnemy = true -- Flag to easily identify enemies
+     instance.playerTarget = nil -- Will be set by GameplayState or when player is detected
+     instance.aiState = "idle" -- Common states: "idle", "patrolling", "hunting", "fleeing", "attacking"
+     
+     instance.visionRadius = 7 -- Default vision radius, can be overridden by specific enemies
+     instance.dataFragmentsValue = love.math.random(3, 8) -- Default data fragments dropped on death
+ 
+     instance.ai = aiData or {} -- Attach AI data from EnemyAI_DB
+     instance.abilityCooldowns = {} -- For special abilities
+ 
+     return instance
+ end
+ 
+ -- Common method to update the AI state based on player visibility
+ -- This can be called by specific enemy 'act' methods
+ function Enemy:updateAiStateBasedOnPlayerVisibility(player, map, gameplayState)
+     local canSeePlayer = false
+     if Helpers.hasLineOfSight(self.x, self.y, player.x, player.y, function(lx, ly) return not map:isTransparent(lx, ly) end) then
+         local dist = Helpers.distanceEuclidean({x=self.x, y=self.y}, {x=player.x, y=player.y}) -- Using Euclidean for radius
+         if dist <= self.visionRadius then
+             canSeePlayer = true
+         end
+     end
+ 
+     if self.aiState == "fleeing" then
+         -- If fleeing, only stop if HP is high enough AND player is not visible or far away
+         if self.hp > (self.fleeThreshold or self.maxHp * 0.3) * 1.5 then
+             if not canSeePlayer or (canSeePlayer and Helpers.distanceEuclidean({x=self.x, y=self.y}, {x=player.x, y=player.y}) > self.visionRadius * 1.2) then
+                 self.aiState = "idle" -- Or patrolling
+                 gameplayState:logMessage(self.name .. " calms down.", _G.Config.activeColors.text)
+             end
+         end
+         -- Otherwise, continue fleeing if possible
+     elseif canSeePlayer then
+         if self.aiState ~= "hunting" then
+             gameplayState:logMessage(self.name .. " spots " .. player.name .. "!", _G.Config.activeColors.enemy)
+         end
+         self.aiState = "hunting"
+         self.playerTarget = player -- Keep track of the player
+     elseif self.aiState == "hunting" then -- Was hunting but lost sight
+         gameplayState:logMessage(self.name .. " lost sight of " .. player.name .. ".", _G.Config.activeColors.text)
+         self.aiState = "patrolling" -- Or "idle"
+         self.playerTarget = nil
+     end
+     -- If idle and can't see player, remains idle or could switch to patrolling
+ end
+ 
+ 
+ -- Base 'act' method for precomputation. Specific enemies will override this
+ -- to define their unique behaviors and planned actions.
+ function Enemy:act(player, map, entities, gameplayState, isPrecomputationPhase)
+     if self.isDead then self.plannedAction = nil; return false end
+     
+     if isPrecomputationPhase then
+         self.plannedAction = nil -- Clear previous plan
+ 
+         if self:hasStatusEffect("stun") then
+             self.plannedAction = { type = "stunned", description = "STUNNED" }
+             return
+         end
+ 
+         -- Update AI state (hunting, fleeing, etc.)
+         self:updateAiStateBasedOnPlayerVisibility(player, map, gameplayState)
+ 
+         -- Process behaviors from the AI definition
+         if self.ai and self.ai.behaviors then
+             for _, behavior in ipairs(self.ai.behaviors) do
+                 -- Check if the behavior is for the current AI state
+                 if behavior.state == self.aiState then
+                     -- Check cooldown if the behavior is an ability
+                     local cd = self.abilityCooldowns[behavior.abilityId] or 0
+                     if cd <= 0 then
+                         -- Execute the planning function for the behavior
+                         local action = behavior.plan(self, player, map, entities, gameplayState)
+                         if action then
+                             self.plannedAction = action
+                             -- If it's an ability, tag it for cooldown handling
+                             if behavior.abilityId then
+                                 self.plannedAction.abilityId = behavior.abilityId
+                                 self.plannedAction.abilityMaxCooldown = behavior.maxCooldown
+                             end
+                             break -- A plan has been made, stop processing behaviors
+                        end
+                    end
+                end
             end
         end
-        -- Otherwise, continue fleeing if possible
-    elseif canSeePlayer then
-        if self.aiState ~= "hunting" then
-            gameplayState:logMessage(self.name .. " spots " .. player.name .. "!", _G.Config.activeColors.enemy)
-        end
-        self.aiState = "hunting"
-        self.playerTarget = player -- Keep track of the player
-    elseif self.aiState == "hunting" then -- Was hunting but lost sight
-        gameplayState:logMessage(self.name .. " lost sight of " .. player.name .. ".", _G.Config.activeColors.text)
-        self.aiState = "patrolling" -- Or "idle"
-        self.playerTarget = nil
-    end
-    -- If idle and can't see player, remains idle or could switch to patrolling
-end
-
-
--- Base 'act' method for precomputation. Specific enemies will override this
--- to define their unique behaviors and planned actions.
-function Enemy:act(player, map, entities, gameplayState, isPrecomputationPhase)
-    if self.isDead then self.plannedAction = nil; return false end
-    
-    if isPrecomputationPhase then
-        self.plannedAction = nil -- Clear previous plan
-        -- Common pre-turn logic for enemies
-        self:updateAiStateBasedOnPlayerVisibility(player, map, gameplayState)
         
         -- Default planned action if not overridden by specific enemy AI
         if not self.plannedAction then
             self.plannedAction = {type = "idle", description = string.upper(self.aiState)}
         end
-    else
-        -- If not precomputation, this base 'act' shouldn't be called directly.
-        -- Instead, 'executePlannedAction' should be called.
-        -- However, if it IS called, it means the enemy type didn't implement executePlannedAction.
-        print("Warning: Base Enemy:act called for execution phase for " .. self.name .. ". Should use executePlannedAction.")
-        if self.executePlannedAction then
-            return self:executePlannedAction(player, map, entities, gameplayState)
+    else -- Execution Phase
+        -- Tick ability cooldowns
+        for id, timer in pairs(self.abilityCooldowns) do
+            if self.plannedAction and self.plannedAction.abilityId == id then
+                -- This ability is about to be used, its cooldown will be set by execute
+            elseif timer > 0 then
+                self.abilityCooldowns[id] = timer - 1
+            end
         end
+
+        if self:processStatusEffectsStartTurn() then
+            self.plannedAction = { type = "stunned", description = "STUNNED" }
+        end
+
+        return self:executePlannedAction(player, map, entities, gameplayState)
     end
     return false -- For precomputation, signal no turn taken yet
 end
@@ -99,7 +136,39 @@ function Enemy:executePlannedAction(player, map, entities, gameplayState)
 
     gs:logMessage(string.format("%s executing: %s", self.name, action.description or action.type), _G.Config.activeColors.text)
 
-    if action.type == "idle" or action.type == "stunned" or action.type == "charging" then
+    -- If a specific execute function is attached to the action, use it
+    if action.execute then
+        actionTaken = action.execute(self, player, map, entities, gameplayState, action)
+        if actionTaken and action.abilityId and action.abilityMaxCooldown then
+            self.abilityCooldowns[action.abilityId] = action.abilityMaxCooldown
+        end
+        return actionTaken
+    end
+
+    -- Generic action handlers
+    if action.type == "attack" then
+        if action.targetEntity and not action.targetEntity.isDead then
+            local logMsg = action.targetEntity:takeDamage(action.damage, self.name)
+            gs:logMessage(logMsg, (action.targetEntity == player and _G.Config.activeColors.player or _G.Config.activeColors.enemy))
+            if action.targetEntity.isDead then gs:logMessage(action.targetEntity.name .. " destroyed!", _G.Config.activeColors.pickup) end
+        end
+        actionTaken = true
+    elseif action.type == "move" then
+        local entityAtTarget = map:getEntityAt(action.targetPos.x, action.targetPos.y)
+        if entityAtTarget and entityAtTarget == player then
+            -- Bump attack logic
+            gs:logMessage(self.name .. " bumps " .. player.name .. "! Attacking.", self.color)
+            local logMsg = player:takeDamage(self.baseAttackPower or 5, self.name)
+            gs:logMessage(logMsg, _G.Config.activeColors.player)
+            actionTaken = true
+        elseif map:isBlocked(action.targetPos.x, action.targetPos.y, self) or entityAtTarget then
+            gs:logMessage(self.name .. " move to (" .. action.targetPos.x .. "," .. action.targetPos.y .. ") blocked.", _G.Config.activeColors.text)
+            actionTaken = true -- Consume turn even if blocked
+        else
+            self:move(action.targetPos.x - self.x, action.targetPos.y - self.y)
+            actionTaken = true
+        end
+    elseif action.type == "idle" or action.type == "stunned" or action.type == "charging" then
         gs:logMessage(self.name .. " " .. (action.description or action.type) .. ".", _G.Config.activeColors.text)
         actionTaken = true
     else
@@ -107,7 +176,6 @@ function Enemy:executePlannedAction(player, map, entities, gameplayState)
         actionTaken = true -- Consume turn even if unhandled
     end
     
-    -- self.plannedAction = nil -- Clear after execution (optional, depends on if UI needs it for one more frame)
     return actionTaken
 end
 

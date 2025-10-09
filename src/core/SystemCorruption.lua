@@ -62,8 +62,8 @@ function SystemCorruption:update(dt)
             if #self.activeVisualGlitches < self.maxVisualGlitches and self.gs and self.gs.map then
                 local chanceToGlitch = self.level / self.maxLevel 
                 if love.math.random() < chanceToGlitch * 0.3 then -- Modulate chance
-                    local randomX, randomY = self.gs.map:getRandomFloorTileForEffect() 
-                    if randomX and self.gs.map:isInFov(randomX, randomY) then 
+                    local randomX, randomY = self.gs.map:getRandomFloorTileForEffect()
+                    if randomX and self.gs.map:isInFov(randomX, randomY) then
                         table.insert(self.activeVisualGlitches, {
                             x = randomX, y = randomY,
                             char = Helpers.choice({"#", "%", "?", "!", "$", "&", "~", ":"}),

@@ -439,6 +439,31 @@ function Map:getRandomFloorTile()
     end
 end
 
+function Map:getRandomFloorTileForEffect()
+    -- Non-destructive version of getRandomFloorTile, for visual effects
+    local floorTileList = self.floorTiles
+    if #floorTileList == 0 then
+        -- Fallback: if the main list is exhausted (by pickups/enemies), build a temporary one.
+        local tempFloors = {}
+        for y = 1, self.height do
+            for x = 1, self.width do
+                if self.tiles[y][x].walkable then
+                    table.insert(tempFloors, {x=x, y=y})
+                end
+            end
+        end
+        floorTileList = tempFloors
+    end
+
+    if #floorTileList > 0 then
+        local tileCoord = Helpers.choice(floorTileList)
+        return tileCoord.x, tileCoord.y
+    end
+
+    -- Absolute fallback if no floor tiles exist at all
+    return math.floor(self.width / 2), math.floor(self.height / 2)
+end
+
 function Map:isWalkable(x, y)
     local tile = self:getTile(x, y)
     return tile and tile.walkable
