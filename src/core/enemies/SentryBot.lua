@@ -8,7 +8,7 @@ setmetatable(SentryBot, {__index = Enemy}) -- INHERIT FROM ENEMY
 
 function SentryBot:new(x, y)
     -- Call the Enemy constructor, which in turn calls Entity constructor
-    local instance = Enemy:new(x, y, "SENTRY_BOT_SPRITE", _G.Config.activeColors.enemy, "SENTRY_BOT", 30, true, EnemyAI_DB.SentryBot)
+    local instance = Enemy:new(x, y, "SENTRY_BOT_SPRITE", ServiceLocator.get("config").activeColors.enemy, "SENTRY_BOT", 30, true, EnemyAI_DB.SentryBot)
     setmetatable(instance, SentryBot) -- Set metatable to SentryBot for its specific methods
 
     instance.baseAttackPower = 5

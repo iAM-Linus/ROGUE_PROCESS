@@ -103,19 +103,19 @@ function SubroutineInstance:activate(caster, target, map, gameplayState)
         end
         -- SFX
         if self.definition.type == SubroutineDB.Types.OFFENSIVE then
-            _G.SFX.play("subroutine_activate_offensive")
+            ServiceLocator.get("sfx").play("subroutine_activate_offensive")
         elseif self.definition.type == SubroutineDB.Types.DEFENSIVE then
-            _G.SFX.play("subroutine_activate_defensive")
+            ServiceLocator.get("sfx").play("subroutine_activate_defensive")
         else
-            _G.SFX.play("subroutine_activate_generic")
+            ServiceLocator.get("sfx").play("subroutine_activate_generic")
         end
     else
         if reason == "Not enough CPU_CYCLES." then
-            _G.SFX.play("subroutine_fail_cpu")
+            ServiceLocator.get("sfx").play("subroutine_fail_cpu")
         elseif reason:find("cooldown") then -- Basic check for cooldown message
-            _G.SFX.play("subroutine_fail_cooldown")
+            ServiceLocator.get("sfx").play("subroutine_fail_cooldown")
         else
-            _G.SFX.play("ui_error")
+            ServiceLocator.get("sfx").play("ui_error")
         end
         gameplayState:logMessage(message or (self:getName() .. " activation failed."), {1,0.5,0.5,1})
     end

@@ -1,6 +1,6 @@
 -- src/core/CameraManager.lua
 local Helpers = require "src.utils.helpers"
-local Config = _G.Config -- Assuming global
+local Config = ServiceLocator.get("config")
 
 local CameraManager = {}
 CameraManager.__index = CameraManager

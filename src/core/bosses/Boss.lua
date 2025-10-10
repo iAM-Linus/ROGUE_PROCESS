@@ -1,13 +1,13 @@
--- src/core/enemies/Boss.lua (A base class for all Bosses)
+-- src/core/bosses/Boss.lua
 local Helpers = require 'src.utils.Helpers'
 local Enemy = require "src.core.Enemy"
-local BossBehaviorDB = require "src.core.bosses.BossBehaviorDB" -- If behaviors are stored separately
+local BossBehaviorDB = require "src.core.bosses.BossBehaviorDB"
 
 local Boss = {}
 Boss.__index = Boss
 setmetatable(Boss, { __index = Enemy })
 
-function Boss:new(x, y, char, color, name, hp, bossId)            -- bossId links to BossBehaviorDB
+function Boss:new(x, y, char, color, name, hp, bossId)
     local instance = Enemy:new(x, y, char, color, name, hp, true) -- Bosses usually block movement
     setmetatable(instance, Boss)
 
@@ -38,9 +38,12 @@ function Boss:_enterPhase(bossInstance, phaseIndex)
     bossInstance.currentPhase = bossInstance.behavior.phases[phaseIndex]
     print(bossInstance.name .. " entering phase: " .. bossInstance.currentPhase.name)
 
-    local gs = _G.GameState.current()
-    if gs and gs.logMessage and bossInstance.currentPhase.entryMessage then
-        gs:logMessage(bossInstance.currentPhase.entryMessage, bossInstance.color)
+    -- Get current gameplay state and log entry message
+    local stateManager = ServiceLocator.get("states")
+    local gameplayState = stateManager:getCurrent()
+    
+    if gameplayState and gameplayState.logMessage and bossInstance.currentPhase.entryMessage then
+        gameplayState:logMessage(bossInstance.currentPhase.entryMessage, bossInstance.color)
     end
 
     -- Reset cooldowns for abilities in this new phase (or manage them globally)
@@ -52,76 +55,71 @@ end
 -- Boss's main AI logic
 function Boss:act(player, map, entities, gameplayState, isPrecomputationPhase)
     if self.isDead then
-        self.plannedAction = nil; return false
+        self.plannedAction = nil
+        return false
     end
 
     if isPrecomputationPhase then
         self.plannedAction = nil 
         local gs = gameplayState -- for logging convenience
-        gs:logMessage(string.format("[BossAct %s] Phase: %s. HP: %d/%d", self.name, self.currentPhase.name, self.hp, self.maxHp), self.color)
+        gs:logMessage(string.format("[BossAct %s] Phase: %s.", self.name, self.currentPhase.name), self.color)
 
-        -- Check for phase transition based on HP
-        local currentHpRatio = self.hp / self.maxHp
-        for i = #self.behavior.phases, 1, -1 do -- Check from highest threshold phase downwards
-            local phaseDef = self.behavior.phases[i]
-            if currentHpRatio <= phaseDef.healthThreshold and i > self.currentPhaseIndex then
-                self:_enterPhase(self, i) -- 'self' is correct here as it's an instance method call
-                break                     -- Transitioned to the highest possible new phase
+        -- Check for phase transitions based on HP
+        local hpPercent = self.hp / self.maxHp
+        for phaseIdx, phaseDef in ipairs(self.behavior.phases) do
+            if phaseIdx > self.currentPhaseIndex and phaseDef.triggerCondition then
+                if phaseDef.triggerCondition(self, player, map, gameplayState) then
+                    self:_enterPhase(self, phaseIdx)
+                    gs:logMessage(string.format("  %s transitioned to Phase %d!", self.name, phaseIdx), self.color)
+                    break
+                end
             end
         end
 
-        if self:hasStatusEffect("stun") then
-            self.plannedAction = { type = "stunned", description = "STUNNED" }
-            gs:logMessage(string.format("  Plan: STUNNED"), self.color)
-        else
-            local availableAbilities = {}
-            if self.currentPhase and self.currentPhase.abilities then
-                for _, abilityDef in ipairs(self.currentPhase.abilities) do
-                    local cd = self.abilityCooldowns[abilityDef.id] or 0
-                    gs:logMessage(string.format("  Ability Check: %s, CD: %d", abilityDef.id, cd), self.color)
-                    if cd <= 0 then
-                        table.insert(availableAbilities, abilityDef)
-                    end
+        -- Try to use an available ability
+        local usableAbilities = {}
+        for _, abilityDef in ipairs(self.currentPhase.abilities) do
+            local cd = self.abilityCooldowns[abilityDef.id] or 0
+            if cd == 0 then
+                if not abilityDef.canUse or abilityDef.canUse(self, player, map, gameplayState) then
+                    table.insert(usableAbilities, abilityDef)
                 end
             end
-            gs:logMessage(string.format("  #Available Abilities (off CD): %d", #availableAbilities), self.color)
+        end
 
-            if #availableAbilities > 0 then
-                local chosenAbilityDef = Helpers.weightedChoice(availableAbilities) 
-                if not chosenAbilityDef then chosenAbilityDef = Helpers.choice(availableAbilities) end 
-                gs:logMessage(string.format("  Chosen Ability (weighted): %s", chosenAbilityDef and chosenAbilityDef.id or "None"), self.color)
-
-                if chosenAbilityDef and chosenAbilityDef.plan then
-                    self.plannedAction = chosenAbilityDef.plan(self, player, map, entities, gameplayState)
-                    if self.plannedAction then 
-                        self.plannedAction.abilityId = chosenAbilityDef.id 
-                        self.plannedAction.abilityMaxCooldown = chosenAbilityDef.maxCooldown
-                        gs:logMessage(string.format("  Plan: Ability %s -> %s", chosenAbilityDef.id, self.plannedAction.description), self.color)
-                    else
-                        gs:logMessage(string.format("  Ability %s plan() returned nil.", chosenAbilityDef.id), self.color)
-                    end
-                end
-            end
+        if #usableAbilities > 0 then
+            -- Choose ability (could be by priority, random, etc.)
+            local chosenAbilityDef = usableAbilities[love.math.random(#usableAbilities)]
             
-            if not self.plannedAction then 
-                gs:logMessage(string.format("  No ability planned. Trying movementPattern."), self.color)
-                if self.currentPhase.movementPattern then
-                    local moveTarget = self.currentPhase.movementPattern(self, player, map)
-                    if moveTarget then
-                        self.plannedAction = {type="move", targetPos=moveTarget, description="TACTICAL MOVE"}
-                        gs:logMessage(string.format("  Plan: Movement -> TACTICAL MOVE to (%d,%d)", moveTarget.x, moveTarget.y), self.color)
-                    else
-                        gs:logMessage(string.format("  MovementPattern returned nil."), self.color)
-                    end
+            -- Plan the action
+            if chosenAbilityDef.plan then
+                self.plannedAction = chosenAbilityDef.plan(self, player, map, gameplayState)
+                if self.plannedAction then
+                    self.plannedAction.abilityId = chosenAbilityDef.id
+                    self.plannedAction.abilityMaxCooldown = chosenAbilityDef.cooldown or 0
+                    gs:logMessage(string.format("  Plan: Ability -> %s", chosenAbilityDef.id), self.color)
+                end
+            end
+        end
+        
+        if not self.plannedAction then 
+            gs:logMessage(string.format("  No ability planned. Trying movementPattern."), self.color)
+            if self.currentPhase.movementPattern then
+                local moveTarget = self.currentPhase.movementPattern(self, player, map)
+                if moveTarget then
+                    self.plannedAction = {type="move", targetPos=moveTarget, description="TACTICAL MOVE"}
+                    gs:logMessage(string.format("  Plan: Movement -> TACTICAL MOVE to (%d,%d)", moveTarget.x, moveTarget.y), self.color)
                 else
-                    gs:logMessage(string.format("  No movementPattern for this phase."), self.color)
+                    gs:logMessage(string.format("  MovementPattern returned nil."), self.color)
                 end
+            else
+                gs:logMessage(string.format("  No movementPattern for this phase."), self.color)
             end
-            
-            if not self.plannedAction then
-                self.plannedAction = {type="idle", description="CALCULATING..."}
-                gs:logMessage(string.format("  Plan: Default -> CALCULATING..."), self.color)
-            end
+        end
+        
+        if not self.plannedAction then
+            self.plannedAction = {type="idle", description="CALCULATING..."}
+            gs:logMessage(string.format("  Plan: Default -> CALCULATING..."), self.color)
         end
     else -- Execution Phase
         if self:processStatusEffectsStartTurn() then
@@ -144,12 +142,14 @@ end
 
 function Boss:executePlannedAction(player, map, entities, gameplayState)
     if not self.plannedAction or self.isDead then return false end
+    
+    local config = ServiceLocator.get("config")
     local action = self.plannedAction
     local gs = gameplayState
     local actionExecuted = false
 
     gs:logMessage(string.format("%s executing: %s", self.name, action.description or action.type),
-        Config.activeColors.text)
+        config.activeColors.text)
 
     -- Find the ability definition to get the execute function
     local abilityDefToExecute = nil
@@ -171,7 +171,7 @@ function Boss:executePlannedAction(player, map, entities, gameplayState)
         -- Handle generic move if not part of a specific ability's execute
         if map:isBlocked(action.targetPos.x, action.targetPos.y, self) or map:getEntityAt(action.targetPos.x, action.targetPos.y) then
             gs:logMessage(self.name .. " move to (" .. action.targetPos.x .. "," .. action.targetPos.y .. ") blocked.",
-                Config.activeColors.text)
+                config.activeColors.text)
         else
             self:move(action.targetPos.x - self.x, action.targetPos.y - self.y)
         end
@@ -181,10 +181,8 @@ function Boss:executePlannedAction(player, map, entities, gameplayState)
         actionExecuted = Enemy.executePlannedAction(self, player, map, entities, gameplayState)
     end
 
+    self.plannedAction = nil
     return actionExecuted
 end
-
--- die() method can be inherited from Enemy.
--- If boss has specific on-death sequence (e.g. final attack, multiple stages), override it.
 
 return Boss

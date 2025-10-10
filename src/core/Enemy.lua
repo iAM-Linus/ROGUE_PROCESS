@@ -31,6 +31,7 @@
  -- Common method to update the AI state based on player visibility
  -- This can be called by specific enemy 'act' methods
  function Enemy:updateAiStateBasedOnPlayerVisibility(player, map, gameplayState)
+    local config = ServiceLocator.get("config")
      local canSeePlayer = false
      if Helpers.hasLineOfSight(self.x, self.y, player.x, player.y, function(lx, ly) return not map:isTransparent(lx, ly) end) then
          local dist = Helpers.distanceEuclidean({x=self.x, y=self.y}, {x=player.x, y=player.y}) -- Using Euclidean for radius
@@ -44,18 +45,18 @@
          if self.hp > (self.fleeThreshold or self.maxHp * 0.3) * 1.5 then
              if not canSeePlayer or (canSeePlayer and Helpers.distanceEuclidean({x=self.x, y=self.y}, {x=player.x, y=player.y}) > self.visionRadius * 1.2) then
                  self.aiState = "idle" -- Or patrolling
-                 gameplayState:logMessage(self.name .. " calms down.", _G.Config.activeColors.text)
+                 gameplayState:logMessage(self.name .. " calms down.", config.activeColors.text)
              end
          end
          -- Otherwise, continue fleeing if possible
      elseif canSeePlayer then
          if self.aiState ~= "hunting" then
-             gameplayState:logMessage(self.name .. " spots " .. player.name .. "!", _G.Config.activeColors.enemy)
+             gameplayState:logMessage(self.name .. " spots " .. player.name .. "!", config.activeColors.enemy)
          end
          self.aiState = "hunting"
          self.playerTarget = player -- Keep track of the player
      elseif self.aiState == "hunting" then -- Was hunting but lost sight
-         gameplayState:logMessage(self.name .. " lost sight of " .. player.name .. ".", _G.Config.activeColors.text)
+         gameplayState:logMessage(self.name .. " lost sight of " .. player.name .. ".", config.activeColors.text)
          self.aiState = "patrolling" -- Or "idle"
          self.playerTarget = nil
      end
@@ -130,11 +131,12 @@ end
 function Enemy:executePlannedAction(player, map, entities, gameplayState)
     if not self.plannedAction or self.isDead then return false end
 
+    local config = ServiceLocator.get("config")
     local action = self.plannedAction
     local gs = gameplayState
     local actionTaken = false
 
-    gs:logMessage(string.format("%s executing: %s", self.name, action.description or action.type), _G.Config.activeColors.text)
+    gs:logMessage(string.format("%s executing: %s", self.name, action.description or action.type), config.activeColors.text)
 
     -- If a specific execute function is attached to the action, use it
     if action.execute then
@@ -149,8 +151,8 @@ function Enemy:executePlannedAction(player, map, entities, gameplayState)
     if action.type == "attack" then
         if action.targetEntity and not action.targetEntity.isDead then
             local logMsg = action.targetEntity:takeDamage(action.damage, self.name)
-            gs:logMessage(logMsg, (action.targetEntity == player and _G.Config.activeColors.player or _G.Config.activeColors.enemy))
-            if action.targetEntity.isDead then gs:logMessage(action.targetEntity.name .. " destroyed!", _G.Config.activeColors.pickup) end
+            gs:logMessage(logMsg, (action.targetEntity == player and config.activeColors.player or config.activeColors.enemy))
+            if action.targetEntity.isDead then gs:logMessage(action.targetEntity.name .. " destroyed!", config.activeColors.pickup) end
         end
         actionTaken = true
     elseif action.type == "move" then
@@ -159,17 +161,17 @@ function Enemy:executePlannedAction(player, map, entities, gameplayState)
             -- Bump attack logic
             gs:logMessage(self.name .. " bumps " .. player.name .. "! Attacking.", self.color)
             local logMsg = player:takeDamage(self.baseAttackPower or 5, self.name)
-            gs:logMessage(logMsg, _G.Config.activeColors.player)
+            gs:logMessage(logMsg, config.activeColors.player)
             actionTaken = true
         elseif map:isBlocked(action.targetPos.x, action.targetPos.y, self) or entityAtTarget then
-            gs:logMessage(self.name .. " move to (" .. action.targetPos.x .. "," .. action.targetPos.y .. ") blocked.", _G.Config.activeColors.text)
+            gs:logMessage(self.name .. " move to (" .. action.targetPos.x .. "," .. action.targetPos.y .. ") blocked.", config.activeColors.text)
             actionTaken = true -- Consume turn even if blocked
         else
             self:move(action.targetPos.x - self.x, action.targetPos.y - self.y)
             actionTaken = true
         end
     elseif action.type == "idle" or action.type == "stunned" or action.type == "charging" then
-        gs:logMessage(self.name .. " " .. (action.description or action.type) .. ".", _G.Config.activeColors.text)
+        gs:logMessage(self.name .. " " .. (action.description or action.type) .. ".", config.activeColors.text)
         actionTaken = true
     else
         gs:logMessage(self.name .. " has an unhandled planned action type: " .. action.type, {1,0,0,1})
@@ -185,12 +187,14 @@ function Enemy:die()
     if self.isDead then return end -- Prevent multiple calls
     Entity.die(self) -- Call base Entity die method (sets char, color, isDead flag etc.)
 
+    local config = ServiceLocator.get("config")
+
     -- Common enemy death behavior: drop data fragments
-    local gameplay = _G.Game.states:getCurrent() -- Assuming current state is GameplayState
+    local gameplay = ServiceLocator.get("states"):getCurrent() -- Assuming current state is GameplayState
     if gameplay and gameplay.player then -- Check if player exists
         gameplay.player.dataFragments = gameplay.player.dataFragments + (self.dataFragmentsValue or 0)
         if (self.dataFragmentsValue or 0) > 0 then
-            gameplay:logMessage(self.name .. " drops " .. (self.dataFragmentsValue or 0) .. " DATA_FRAGMENTS.", _G.Config.activeColors.pickup)
+            gameplay:logMessage(self.name .. " drops " .. (self.dataFragmentsValue or 0) .. " DATA_FRAGMENTS.", config.activeColors.pickup)
         end
     end
     -- Specific enemies can further override this to add unique drops or effects on death

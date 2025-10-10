@@ -8,7 +8,7 @@ setmetatable(FirewallNode, {__index = Enemy}) -- Inherit from Enemy
 
 function FirewallNode:new(x, y)
     -- Call Enemy constructor. Firewall Node doesn't block player movement.
-    local instance = Enemy:new(x, y, "FIREWALL_NODE_SPRITE", _G.Config.activeColors.enemy, "FIREWALL_NODE", 50, false, EnemyAI_DB.FirewallNode)
+    local instance = Enemy:new(x, y, "FIREWALL_NODE_SPRITE", ServiceLocator.get("config").activeColors.enemy, "FIREWALL_NODE", 50, false, EnemyAI_DB.FirewallNode)
     setmetatable(instance, FirewallNode)
 
     instance.pulseDamage = 8

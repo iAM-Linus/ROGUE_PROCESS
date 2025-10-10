@@ -12,7 +12,7 @@ GlitchSwarmer.activeSwarmerCount = 0
 GlitchSwarmer.maxTotalSwarmers = 10 -- Max swarmers allowed on the map at once
 
 function GlitchSwarmer:new(x, y)
-    local instance = Enemy:new(x, y, "GLITCH_SWARMER_SPRITE", _G.Config.activeColors.enemy, "SWARMER", 10, true, EnemyAI_DB.GlitchSwarmer) -- Purple-ish, 10 HP
+    local instance = Enemy:new(x, y, "GLITCH_SWARMER_SPRITE", ServiceLocator.get("config").activeColors.enemy, "SWARMER", 10, true, EnemyAI_DB.GlitchSwarmer) -- Purple-ish, 10 HP
     setmetatable(instance, GlitchSwarmer)
 
     instance.baseAttackPower = 2
@@ -34,9 +34,9 @@ function GlitchSwarmer:die()
     GlitchSwarmer.activeSwarmerCount = GlitchSwarmer.activeSwarmerCount - 1
     -- print("Swarmer died. Active count: " .. GlitchSwarmer.activeSwarmerCount)
     -- Add any GlitchSwarmer-specific death effects, like a tiny visual glitch
-    local gs = _G.Game.states:getCurrent()
+    local gs = ServiceLocator.get("states"):getCurrent()
     if gs and ParticleFX then
-        ParticleFX.spawnFloatingText(gs, "~", self.x, self.y, {color=self.color, duration=0.3, vy=-5, font=_G.Fonts.large})
+        ParticleFX.spawnFloatingText(gs, "~", self.x, self.y, {color=self.color, duration=0.3, vy=-5, font=ServiceLocator.get("fonts").large})
     end
 end
 

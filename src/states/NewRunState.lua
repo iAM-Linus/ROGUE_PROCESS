@@ -69,8 +69,9 @@ function NewRunState:new(game)
 end
 
 function NewRunState:initializeVisualEffects()
-    local nativeW = (self.config or _G.Config).nativeResolution.width
-    local nativeH = (self.config or _G.Config).nativeResolution.height
+    local config = ServiceLocator.get("config")
+    local nativeW = config.nativeResolution.width
+    local nativeH = config.nativeResolution.height
     
     -- Neural network connection lines
     for i = 1, 15 do
@@ -96,7 +97,7 @@ function NewRunState:initializeVisualEffects()
             maxLife = love.math.random(5, 10),
             size = love.math.random(1, 3),
             char = love.math.random() < 0.5 and "·" or "○",
-            color = (self.config or _G.Config).activeColors.accent,
+            color = config.activeColors.accent,
             phase = love.math.random() * math.pi * 2
         })
     end
@@ -160,7 +161,7 @@ function NewRunState:initializeVisualEffects()
             life = love.math.random(2, 5),
             maxLife = love.math.random(2, 5),
             size = love.math.random(1, 3),
-            color = (self.config or _G.Config).activeColors.highlight
+            color = config.activeColors.highlight
         })
     end
 end
@@ -198,7 +199,7 @@ function NewRunState:enter()
     self.coreInitialization.active = true
     self.coreInitialization.progress = 0
     
-    love.graphics.setBackgroundColor(self.config.activeColors.background)
+    love.graphics.setBackgroundColor(ServiceLocator.get("config").activeColors.background)
 
     -- Emit event
     if self.events then
@@ -214,6 +215,8 @@ function NewRunState:update(dt)
     if self.paused then return end
 
     Timer.update(dt)
+
+    local config = ServiceLocator.get("config")
     
     self.animationTime = self.animationTime + dt
     self.selectionPulse = self.selectionPulse + dt * 3
@@ -257,10 +260,10 @@ function NewRunState:update(dt)
         particle.life = particle.life - dt
         
         -- Wrap around screen
-        if particle.x < -10 then particle.x = (self.config or _G.Config).nativeResolution.width + 10 end
-        if particle.x > (self.config or _G.Config).nativeResolution.width + 10 then particle.x = -10 end
-        if particle.y < -10 then particle.y = (self.config or _G.Config).nativeResolution.height + 10 end
-        if particle.y > (self.config or _G.Config).nativeResolution.height + 10 then particle.y = -10 end
+        if particle.x < -10 then particle.x = config.nativeResolution.width + 10 end
+        if particle.x > config.nativeResolution.width + 10 then particle.x = -10 end
+        if particle.y < -10 then particle.y = config.nativeResolution.height + 10 end
+        if particle.y > config.nativeResolution.height + 10 then particle.y = -10 end
         
         if particle.life <= 0 then
             particle.life = particle.maxLife
@@ -287,7 +290,7 @@ function NewRunState:update(dt)
             particle.y = particle.y + stream.speed * dt
             particle.alpha = particle.alpha * 0.998
             
-            if particle.y > (self.config or _G.Config).nativeResolution.height + 20 or particle.alpha < 0.1 then
+            if particle.y > config.nativeResolution.height + 20 or particle.alpha < 0.1 then
                 table.remove(stream.particles, i)
             end
         end
@@ -303,9 +306,9 @@ function NewRunState:update(dt)
     for _, code in ipairs(self.matrixCode) do
         code.y = code.y + code.speed * dt
         
-        if code.y > (self.config or _G.Config).nativeResolution.height + 50 then
+        if code.y > config.nativeResolution.height + 50 then
             code.y = love.math.random(-100, -20)
-            code.x = love.math.random(0, (self.config or _G.Config).nativeResolution.width)
+            code.x = love.math.random(0, config.nativeResolution.width)
         end
     end
     
@@ -331,7 +334,8 @@ function NewRunState:update(dt)
 end
 
 function NewRunState:drawEnhancedBackground()
-    local config = self.config or _G.Config
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
     local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
     
     -- Base background with subtle gradient
@@ -339,7 +343,7 @@ function NewRunState:drawEnhancedBackground()
     love.graphics.rectangle("fill", 0, 0, nativeW, nativeH)
     
     -- Matrix code rain
-    love.graphics.setFont(_G.Fonts.small)
+    love.graphics.setFont(fonts.small)
     for _, code in ipairs(self.matrixCode) do
         love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
                               config.activeColors.accent[3], code.alpha)
@@ -362,7 +366,7 @@ function NewRunState:drawEnhancedBackground()
     end
     
     -- Data stream effects
-    love.graphics.setFont(_G.Fonts.small)
+    love.graphics.setFont(fonts.small)
     for _, stream in ipairs(self.dataStreamEffects) do
         for _, particle in ipairs(stream.particles) do
             love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
@@ -372,7 +376,7 @@ function NewRunState:drawEnhancedBackground()
     end
     
     -- Background particles with trails
-    love.graphics.setFont(_G.Fonts.small)
+    love.graphics.setFont(fonts.small)
     for _, particle in ipairs(self.backgroundParticles) do
         local alpha = (particle.life / particle.maxLife) * (0.5 + 0.5 * math.sin(particle.phase))
         love.graphics.setColor(particle.color[1], particle.color[2], particle.color[3], alpha * 0.4)
@@ -455,6 +459,8 @@ end
 function NewRunState:updateCoreDisplaySlots(instant)
     if #self.selectableCores == 0 then return end
 
+    local config = ServiceLocator.get("config")
+
     local oldTargetCoreIndex = self.currentDisplayCoreIndex
     local newTargetCoreIndex = self.targetCoreIndex
 
@@ -466,13 +472,13 @@ function NewRunState:updateCoreDisplaySlots(instant)
     local newNextCoreDef = self.selectableCores[newNextIndex]
 
     if instant then
-        slots.current.char = newCurrentCoreDef.char; slots.current.color = newCurrentCoreDef.color or (self.config or _G.Config).activeColors.player
+        slots.current.char = newCurrentCoreDef.char; slots.current.color = newCurrentCoreDef.color or config.activeColors.player
         slots.current.scale = 1.0; slots.current.alpha = 1.0; slots.current.x_offset_factor = 0; slots.current.glow = 1
 
-        slots.prev.char = newPrevCoreDef.char; slots.prev.color = newPrevCoreDef.color or (self.config or _G.Config).activeColors.player
+        slots.prev.char = newPrevCoreDef.char; slots.prev.color = newPrevCoreDef.color or config.activeColors.player
         slots.prev.scale = 0.7; slots.prev.alpha = (#self.selectableCores > 1) and 0.5 or 0; slots.prev.x_offset_factor = -0.35; slots.prev.glow = 0
         
-        slots.next.char = newNextCoreDef.char; slots.next.color = newNextCoreDef.color or (self.config or _G.Config).activeColors.player
+        slots.next.char = newNextCoreDef.char; slots.next.color = newNextCoreDef.color or config.activeColors.player
         slots.next.scale = 0.7; slots.next.alpha = (#self.selectableCores > 1) and 0.5 or 0; slots.next.x_offset_factor = 0.35; slots.next.glow = 0
         
         self.currentDisplayCoreIndex = self.targetCoreIndex
@@ -583,8 +589,8 @@ function NewRunState:draw()
 
     BaseState.draw(self)
 
-    local config = self.config or _G.Config
-    local fonts = self.resources and self.resources:getFonts() or _G.Fonts
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
     local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
     
     -- Enhanced animated background
@@ -696,7 +702,8 @@ function NewRunState:draw()
 end
 
 function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, selectedCoreData)
-    local config = self.config or _G.Config
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
     
     local coreDisplayY = panelY + math.floor(panelH * 0.35)
     
@@ -721,7 +728,7 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
     end
     
     -- Enhanced core character display with effects
-    love.graphics.setFont(_G.Fonts.title)
+    love.graphics.setFont(fonts.title)
     
     for slotName, slotData in pairs(self.coreDisplaySlots) do
         if slotData.alpha > 0.01 and slotData.char ~= "" then
@@ -751,7 +758,7 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
             end
             
             -- Main character with enhanced effects
-            local font = _G.Fonts.title
+            local font = fonts.title
             local charW = font:getWidth(char) * scale
             local charH = font:getHeight() * scale
             local charX = centerX + x_offset - charW / 2
@@ -792,14 +799,14 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
         local coreDescY = panelY + math.floor(panelH * 0.78)
         
         -- Core name with holographic effect
-        love.graphics.setFont(_G.Fonts.large)
+        love.graphics.setFont(fonts.large)
         UIHelpers.drawHolographicText(selectedCoreData.name, 
-                                      centerX - _G.Fonts.large:getWidth(selectedCoreData.name)/2, 
-                                      coreNameY, _G.Fonts.large, 
+                                      centerX - fonts.large:getWidth(selectedCoreData.name)/2, 
+                                      coreNameY, fonts.large, 
                                       config.activeColors.highlight, self.animationTime)
         
         -- Core description with subtle animation
-        love.graphics.setFont(_G.Fonts.medium)
+        love.graphics.setFont(fonts.medium)
         local descPulse = 0.8 + 0.2 * math.sin(self.animationTime * 1.5)
         love.graphics.setColor(config.activeColors.text[1] * descPulse, 
                               config.activeColors.text[2] * descPulse, 
@@ -816,9 +823,9 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
         
         -- Navigation arrows
         if #self.selectableCores > 1 then
-            love.graphics.setFont(_G.Fonts.large)
-            love.graphics.print("◄", centerX - displayW/2 - 20, coreDisplayY - _G.Fonts.large:getHeight()/2)
-            love.graphics.print("►", centerX + displayW/2 + 5, coreDisplayY - _G.Fonts.large:getHeight()/2)
+            love.graphics.setFont(fonts.large)
+            love.graphics.print("◄", centerX - displayW/2 - 20, coreDisplayY - fonts.large:getHeight()/2)
+            love.graphics.print("►", centerX + displayW/2 + 5, coreDisplayY - fonts.large:getHeight()/2)
         end
         
         -- Selection field
@@ -833,11 +840,12 @@ function NewRunState:drawEnhancedCoreDisplay(centerX, panelY, displayW, panelH, 
 end
 
 function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
-    local config = self.config or _G.Config
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
 
-    love.graphics.setFont(_G.Fonts.medium)
+    love.graphics.setFont(fonts.medium)
     local subItemY = subPY + 20
-    local subItemLineHeight = _G.Fonts.medium:getHeight() + 8
+    local subItemLineHeight = fonts.medium:getHeight() + 8
     
     -- Enhanced subroutine display
     if #self.availableStartingSubs > 0 then
@@ -851,7 +859,7 @@ function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
         love.graphics.print(subInfo.name, subPX + 15, subItemY)
         
         -- Enhanced description
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
         love.graphics.setColor(config.activeColors.text)
         love.graphics.printf(subInfo.description, subPX + 20, subItemY + subItemLineHeight + 5, subPW - 40, "left")
         
@@ -884,7 +892,7 @@ function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
         UIHelpers.drawRoundedRect(slotX, slotY, slotSize, slotSize, 4, "line")
         
         -- Slot number
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
         love.graphics.setColor(config.activeColors.text)
         love.graphics.print(tostring(i + 1), slotX + slotSize/2 - 4, slotY + slotSize/2 - 6)
         
@@ -901,11 +909,12 @@ function NewRunState:drawEnhancedSubroutinePanel(subPX, subPY, subPW, subPH)
 end
 
 function NewRunState:drawEnhancedNavigation(nativeW, nativeH, panelPadding)
-    local config = self.config or _G.Config
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
     
-    love.graphics.setFont(_G.Fonts.large)
-    local buttonW = _G.Fonts.large:getWidth("START") + math.floor(nativeW * 0.06)
-    local buttonH = _G.Fonts.large:getHeight() + math.floor(nativeH * 0.025)
+    love.graphics.setFont(fonts.large)
+    local buttonW = fonts.large:getWidth("START") + math.floor(nativeW * 0.06)
+    local buttonH = fonts.large:getHeight() + math.floor(nativeH * 0.025)
     
     -- Update button positions
     self.uiElements.back.x = panelPadding
@@ -951,8 +960,8 @@ function NewRunState:drawEnhancedNavigation(nativeW, nativeH, panelPadding)
                               config.activeColors.text[2] * textPulse, 
                               config.activeColors.text[3] * textPulse, 1)
         
-        local textX = btn.x + btn.w/2 - _G.Fonts.large:getWidth(btn.text)/2
-        local textY = btn.y + btn.h/2 - _G.Fonts.large:getHeight()/2
+        local textX = btn.x + btn.w/2 - fonts.large:getWidth(btn.text)/2
+        local textY = btn.y + btn.h/2 - fonts.large:getHeight()/2
         
         -- Text glow for selected button
         if isSelected and glowIntensity > 0.3 then
@@ -999,7 +1008,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
             self:updateCoreDisplaySlots(false)
             self:updateDisplayedCoreInfo()
             self.selectedSubroutineIndex = 1
-            _G.SFX.play("ui_navigate")
+            ServiceLocator.get("sfx").play("ui_navigate")
             self:triggerCoreSelectionEffect()
             
             -- Emit event
@@ -1019,7 +1028,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
             self:updateCoreDisplaySlots(false)
             self:updateDisplayedCoreInfo()
             self.selectedSubroutineIndex = 1
-            _G.SFX.play("ui_navigate")
+            ServiceLocator.get("sfx").play("ui_navigate")
             self:triggerCoreSelectionEffect()
             
             -- Emit event
@@ -1032,7 +1041,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
             
         elseif key == "down" then
             self.selectedUIElement = "subroutine"
-            _G.SFX.play("ui_navigate")
+            ServiceLocator.get("sfx").play("ui_navigate")
         elseif key == "up" then
             -- Could add wrapping to navigation buttons
         end
@@ -1044,41 +1053,41 @@ function NewRunState:keypressed(key, scancode, isrepeat)
                 if self.selectedSubroutineIndex < 1 then
                     self.selectedSubroutineIndex = #self.availableStartingSubs
                 end
-                _G.SFX.play("ui_navigate")
+                ServiceLocator.get("sfx").play("ui_navigate")
             elseif key == "down" then
                 self.selectedSubroutineIndex = self.selectedSubroutineIndex + 1
                 if self.selectedSubroutineIndex > #self.availableStartingSubs then
                     self.selectedSubroutineIndex = 1
                 end
-                _G.SFX.play("ui_navigate")
+                ServiceLocator.get("sfx").play("ui_navigate")
             elseif key == "left" then
                 self.selectedUIElement = "core"
-                _G.SFX.play("ui_navigate")
+                ServiceLocator.get("sfx").play("ui_navigate")
             end
         else
             if key == "up" then
                 self.selectedUIElement = "core"
-                _G.SFX.play("ui_navigate")
+                ServiceLocator.get("sfx").play("ui_navigate")
             elseif key == "down" then
                 self.selectedUIElement = "start"
-                _G.SFX.play("ui_navigate")
+                ServiceLocator.get("sfx").play("ui_navigate")
             end
         end
         
     elseif self.selectedUIElement == "start" or self.selectedUIElement == "back" then
         if key == "left" or key == "right" then
             self.selectedUIElement = (self.selectedUIElement == "start") and "back" or "start"
-            _G.SFX.play("ui_navigate")
+            ServiceLocator.get("sfx").play("ui_navigate")
         elseif key == "up" then
             self.selectedUIElement = "subroutine"
-            _G.SFX.play("ui_navigate")
+            ServiceLocator.get("sfx").play("ui_navigate")
         end
     end
     
     if key == "return" or key == "kpenter" then
         if self.selectedUIElement == "start" then
             if #self.selectableCores > 0 then
-                _G.SFX.play("ui_select")
+                ServiceLocator.get("sfx").play("ui_select")
                 self:triggerInitializationEffect()
                 
                 -- Emit event
@@ -1090,7 +1099,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
                     })
                 end
                 
-                _G.MetaProgress:setSelectedAICoreId(self.selectableCores[self.targetCoreIndex].id)
+                ServiceLocator.get("metaProgress"):setSelectedAICoreId(self.selectableCores[self.targetCoreIndex].id)
                 
                 -- Delay state switch to show initialization animation
                 love.timer.sleep(0.4)
@@ -1099,7 +1108,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
                 self.stateManager:switch("gameplay", {resetLevel = true})
             end
         elseif self.selectedUIElement == "back" then
-            _G.SFX.play("ui_back")
+            ServiceLocator.get("sfx").play("ui_back")
             
             -- Emit event
             if self.events then
@@ -1110,7 +1119,7 @@ function NewRunState:keypressed(key, scancode, isrepeat)
             self.stateManager:switch("mainmenu")
         end
     elseif key == "escape" then
-        _G.SFX.play("ui_back")
+        ServiceLocator.get("sfx").play("ui_back")
         
         -- Emit event
         if self.events then
@@ -1126,8 +1135,9 @@ end
 
 function NewRunState:triggerCoreSelectionEffect()
     -- Add core selection particles
-    local centerX = (self.config or _G.Config).nativeResolution.width * 0.5
-    local centerY = (self.config or _G.Config).nativeResolution.height * 0.4
+    local config = ServiceLocator.get("config")
+    local centerX = config.nativeResolution.width * 0.5
+    local centerY = config.nativeResolution.height * 0.4
     
     for i = 1, 8 do
         table.insert(self.backgroundParticles, {
@@ -1139,13 +1149,14 @@ function NewRunState:triggerCoreSelectionEffect()
             maxLife = 1.5,
             size = 2,
             char = "◦",
-            color = (self.config or _G.Config).activeColors.highlight,
+            color = config.activeColors.highlight,
             phase = 0
         })
     end
 end
 
 function NewRunState:triggerInitializationEffect()
+    local config = ServiceLocator.get("config")
     -- Activate initialization beam
     self.initializationBeam.active = true
     self.initializationBeam.progress = 0
@@ -1154,15 +1165,15 @@ function NewRunState:triggerInitializationEffect()
     -- Add initialization particles
     for i = 1, 20 do
         table.insert(self.backgroundParticles, {
-            x = love.math.random(0, (self.config or _G.Config).nativeResolution.width),
-            y = (self.config or _G.Config).nativeResolution.height * 0.7,
+            x = love.math.random(0, config.nativeResolution.width),
+            y = config.nativeResolution.height * 0.7,
             vx = love.math.random(-80, 80),
             vy = love.math.random(-40, 40),
             life = 2.5,
             maxLife = 2.5,
             size = 3,
             char = "●",
-            color = (self.config or _G.Config).activeColors.pickup,
+            color = config.activeColors.pickup,
             phase = 0
         })
     end

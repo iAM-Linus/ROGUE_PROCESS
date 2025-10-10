@@ -1,4 +1,6 @@
 -- src/core/SubroutineDB.lua
+local config = ServiceLocator.get("config")
+
 
 local SubroutineDB = {}
 
@@ -49,13 +51,13 @@ SubroutineDB.Subroutines = {
                         ParticleFX.spawnLaserBeam(gameplayState, caster, target)
                     end
                     local logMsg = target:takeDamage(levelData.damage, caster.name .. " (LASER.EXE)")
-                    gameplayState:logMessage(logMsg, _G.Config.activeColors.enemy)
+                    gameplayState:logMessage(logMsg, config.activeColors.enemy)
                     if target.isDead then
-                        gameplayState:logMessage(target.name .. " was pierced by LASER.EXE.", _G.Config.activeColors.pickup)
+                        gameplayState:logMessage(target.name .. " was pierced by LASER.EXE.", config.activeColors.pickup)
                     end
                     -- TODO: Visual effect for laser (e.g., text particle line)
                     gameplayState:logMessage(caster.name .. " fires LASER.EXE at " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " fires LASER.EXE."
                 end
             },
@@ -70,12 +72,12 @@ SubroutineDB.Subroutines = {
                         ParticleFX.spawnLaserBeam(gameplayState, caster, target)
                     end
                     local logMsg = target:takeDamage(levelData.damage, caster.name .. " (LASER.EXE Lvl2)")
-                    gameplayState:logMessage(logMsg, _G.Config.activeColors.enemy)
+                    gameplayState:logMessage(logMsg, config.activeColors.enemy)
                     if target.isDead then
-                        gameplayState:logMessage(target.name .. " was pierced by LASER.EXE.", _G.Config.activeColors.pickup)
+                        gameplayState:logMessage(target.name .. " was pierced by LASER.EXE.", config.activeColors.pickup)
                     end
                     gameplayState:logMessage(caster.name .. " fires enhanced LASER.EXE at " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " fires enhanced LASER.EXE."
                 end
             },
@@ -91,13 +93,13 @@ SubroutineDB.Subroutines = {
                         ParticleFX.spawnLaserBeam(gameplayState, caster, target)
                     end
                     local logMsg = target:takeDamage(levelData.damage, caster.name .. " (LASER.EXE Lvl3)")
-                    gameplayState:logMessage(logMsg, _G.Config.activeColors.enemy)
+                    gameplayState:logMessage(logMsg, config.activeColors.enemy)
                     if target.isDead then
                         gameplayState:logMessage(target.name .. " was obliterated by LASER.EXE.",
-                            _G.Config.activeColors.pickup)
+                            config.activeColors.pickup)
                     end
                     gameplayState:logMessage(caster.name .. " fires piercing LASER.EXE at " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     -- TODO: Implement actual piercing logic
                     return true, caster.name .. " fires piercing LASER.EXE."
                 end
@@ -124,7 +126,7 @@ SubroutineDB.Subroutines = {
                     if ParticleFX then
                         ParticleFX.spawnAoEPulse(gameplayState, caster.x, caster.y, levelData.range, "▒", {1,0.6,0.2,0.8})
                     end
-                    gameplayState:logMessage(caster.name .. " emits an OVERCLOCK_PULSE!", _G.Config.activeColors.player)
+                    gameplayState:logMessage(caster.name .. " emits an OVERCLOCK_PULSE!", config.activeColors.player)
                     for y_offset = -levelData.range, levelData.range do
                         for x_offset = -levelData.range, levelData.range do
                             if x_offset == 0 and y_offset == 0 then goto continue_loop end -- Skip self
@@ -133,10 +135,10 @@ SubroutineDB.Subroutines = {
                             local entity = map:getEntityAt(checkX, checkY)
                             if entity and entity ~= caster and not entity.isDead then
                                 local logMsg = entity:takeDamage(levelData.damage, caster.name .. " (OVERCLOCK_PULSE)")
-                                gameplayState:logMessage(logMsg, _G.Config.activeColors.enemy)
+                                gameplayState:logMessage(logMsg, config.activeColors.enemy)
                                 if entity.isDead then
                                     gameplayState:logMessage(entity.name .. " was caught in the pulse.",
-                                        _G.Config.activeColors.pickup)
+                                        config.activeColors.pickup)
                                 end
                                 affectedCount = affectedCount + 1
                             end
@@ -158,7 +160,7 @@ SubroutineDB.Subroutines = {
                         ParticleFX.spawnAoEPulse(gameplayState, caster.x, caster.y, levelData.range, "▒", {1,0.6,0.2,0.8})
                     end
                     gameplayState:logMessage(caster.name .. " emits a powerful OVERCLOCK_PULSE!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     for y_offset = -levelData.range, levelData.range do
                         for x_offset = -levelData.range, levelData.range do
                             if x_offset == 0 and y_offset == 0 then goto continue_loop end
@@ -168,10 +170,10 @@ SubroutineDB.Subroutines = {
                             if entity and entity ~= caster and not entity.isDead then
                                 local logMsg = entity:takeDamage(levelData.damage,
                                     caster.name .. " (OVERCLOCK_PULSE Lvl2)")
-                                gameplayState:logMessage(logMsg, _G.Config.activeColors.enemy)
+                                gameplayState:logMessage(logMsg, config.activeColors.enemy)
                                 if entity.isDead then
                                     gameplayState:logMessage(entity.name .. " was caught in the powerful pulse.",
-                                        _G.Config.activeColors.pickup)
+                                        config.activeColors.pickup)
                                 end
                                 affectedCount = affectedCount + 1
                             end
@@ -211,7 +213,7 @@ SubroutineDB.Subroutines = {
                     }
                     target:addStatusEffect(effect)
                     gameplayState:logMessage(caster.name .. " corrupts " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " applies Corruption."
                 end
             },
@@ -228,7 +230,7 @@ SubroutineDB.Subroutines = {
                     }
                     target:addStatusEffect(effect)
                     gameplayState:logMessage(caster.name .. " severely corrupts " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " applies severe Corruption."
                 end
             }
@@ -253,7 +255,7 @@ SubroutineDB.Subroutines = {
                     local affectedCount = 0
                     gameplayState:logMessage(
                     caster.name .. " detonates DATA_BOMB at " .. targetLocation.x .. "," .. targetLocation.y .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     for dy = -levelData.aoeRadius, levelData.aoeRadius do
                         for dx = -levelData.aoeRadius, levelData.aoeRadius do
                             local currentX, currentY = targetLocation.x + dx, targetLocation.y + dy
@@ -261,7 +263,7 @@ SubroutineDB.Subroutines = {
                             if entity and entity ~= caster and not entity.isDead and not entity.isPickup then
                                 -- Optional: Check LOS from explosion center to entity if desired
                                 local logMsg = entity:takeDamage(levelData.damage, caster.name .. " (DATA_BOMB)")
-                                gameplayState:logMessage(logMsg, _G.Config.activeColors.enemy)
+                                gameplayState:logMessage(logMsg, config.activeColors.enemy)
                                 if entity.isDead then end
                                 affectedCount = affectedCount + 1
                             end
@@ -297,7 +299,7 @@ SubroutineDB.Subroutines = {
                     caster:addStatusEffect(effect)                 -- Add as a status effect
                     gameplayState:logMessage(
                     caster.name .. " activates FIREWALL.SYS (Shield: " .. levelData.shieldAmount .. ").",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " activates FIREWALL.SYS."
                 end
             },
@@ -314,7 +316,7 @@ SubroutineDB.Subroutines = {
                     caster:addStatusEffect(effect)
                     gameplayState:logMessage(
                     caster.name .. " activates upgraded FIREWALL.SYS (Shield: " .. levelData.shieldAmount .. ").",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " activates upgraded FIREWALL.SYS."
                 end
             }
@@ -348,7 +350,7 @@ SubroutineDB.Subroutines = {
                     }
                     target:addStatusEffect(effect)
                     gameplayState:logMessage(caster.name .. " interrupts " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " stuns " .. target.name .. "."
                 end
             },
@@ -364,7 +366,7 @@ SubroutineDB.Subroutines = {
                     }
                     target:addStatusEffect(effect)
                     gameplayState:logMessage(caster.name .. " severely interrupts " .. target.name .. "!",
-                        _G.Config.activeColors.player)
+                        config.activeColors.player)
                     return true, caster.name .. " stuns " .. target.name .. " for longer."
                 end
             }

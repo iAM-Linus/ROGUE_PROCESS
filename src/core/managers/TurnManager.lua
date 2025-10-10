@@ -91,7 +91,7 @@ function TurnManager:nextTurn()
     
     if actor and not actor.isDead then
         -- Process end-of-turn status effects (DoT, duration ticks) for the actor whose turn just ended
-        actor:processStatusEffectsEndTurn(_G.Game.states:getCurrent()) -- Pass gameplay state for logging
+        actor:processStatusEffectsEndTurn(ServiceLocator.get("states"):getCurrent()) -- Pass gameplay state for logging
 
         -- If the actor is the player, also handle player-specific end-of-turn stuff
         if actor == self.player then

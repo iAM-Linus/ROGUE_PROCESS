@@ -8,7 +8,7 @@ setmetatable(CipherSentinel, {__index = Enemy})
 
 function CipherSentinel:new(x, y)
     -- Bluish/Cyan color, high HP, blocks movement
-    local instance = Enemy:new(x, y, "CIPHER_SENTINEL_SPRITE", _G.Config.activeColors.enemy, "CIPHER_SENTINEL", 75, true, EnemyAI_DB.CipherSentinel) 
+    local instance = Enemy:new(x, y, "CIPHER_SENTINEL_SPRITE", ServiceLocator.get("config").activeColors.enemy, "CIPHER_SENTINEL", 75, true, EnemyAI_DB.CipherSentinel) 
     setmetatable(instance, CipherSentinel)
 
     instance.baseAttackPower = 6

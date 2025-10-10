@@ -30,7 +30,7 @@ function SpriteManager.load()
 
     -- Load your main new tilesheet
     -- Replace "input_file_0.png" with the actual name you save it as, e.g., "tileset_coq.png"
-    local mainSheet = loadImageAndDefineSheet("main", _G.Config.spriteSheetPaths.main,
+    local mainSheet = loadImageAndDefineSheet("main", ServiceLocator.get("config").spriteSheetPaths.main,
                                             SpriteManager.DEFAULT_SPRITE_DIMENSION, 
                                             SpriteManager.DEFAULT_SPRITE_DIMENSION)
     

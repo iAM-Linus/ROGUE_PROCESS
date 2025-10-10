@@ -18,12 +18,12 @@ end
 
 -- Static factory for Subroutine Cache
 function Pickup.newSubroutineCache(x, y)
-    return Pickup:new(x, y, "SUBROUTINE_CACHE_QUAD", _G.Config.activeColors.pickup, "SUBROUTINE_CACHE", "SUBROUTINE_CACHE")
+    return Pickup:new(x, y, "SUBROUTINE_CACHE_QUAD", ServiceLocator.get("config").activeColors.pickup, "SUBROUTINE_CACHE", "SUBROUTINE_CACHE")
 end
 
 function Pickup.newDataFragment(x,y, amount)
     amount = amount or love.math.random(5,20)
-    return Pickup:new(x,y, "DATA_FRAGMENT_QUAD", _G.Config.activeColors.pickup, "DATA_FRAGMENT", "DATA_FRAGMENT", {value = amount})
+    return Pickup:new(x,y, "DATA_FRAGMENT_QUAD", ServiceLocator.get("config").activeColors.pickup, "DATA_FRAGMENT", "DATA_FRAGMENT", {value = amount})
 end
 
 function Pickup.newRepairNanites(x,y, amount)

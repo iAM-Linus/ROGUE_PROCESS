@@ -13,8 +13,9 @@ end
 -- spec.gridX, spec.gridY: initial position in map grid coordinates
 -- spec.offsetX, spec.offsetY: pixel offset from the tile's center (optional)
 function ParticleSystem:addParticle(spec)
-    local initialPixelX = (spec.gridX - 1) * _G.Config.spriteSize + (_G.Config.spriteSize / 2) + (spec.offsetX or 0)
-    local initialPixelY = (spec.gridY - 1) * _G.Config.spriteSize + (_G.Config.spriteSize / 2) + (spec.offsetY or 0)
+    local config = ServiceLocator.get("config")
+    local initialPixelX = (spec.gridX - 1) * config.spriteSize + (config.spriteSize / 2) + (spec.offsetX or 0)
+    local initialPixelY = (spec.gridY - 1) * config.spriteSize + (config.spriteSize / 2) + (spec.offsetY or 0)
 
     local p = {
         worldX = initialPixelX, -- Current world pixel X

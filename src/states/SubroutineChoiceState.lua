@@ -2,6 +2,8 @@
 local SubroutineDB = require "src.core.SubroutineDB"
 local UIHelpers = require "src.ui.ui_helpers"
 local BaseState = require "src.core.base_state"
+local config = ServiceLocator.get("config")
+local fonts = ServiceLocator.get("fonts")
 
 local SubroutineChoiceState = {}
 SubroutineChoiceState.__index = SubroutineChoiceState
@@ -47,8 +49,8 @@ end
 
 function SubroutineChoiceState:initializeVisualEffects()
     -- Matrix rain effect
-    local nativeW = self.config.nativeResolution.width
-    local nativeH = self.config.nativeResolution.height
+    local nativeW = config.nativeResolution.width
+    local nativeH = config.nativeResolution.height
 
     for i = 1, 25 do
         table.insert(self.matrixRain, {
@@ -82,7 +84,7 @@ function SubroutineChoiceState:initializeVisualEffects()
             maxLife = love.math.random(3, 7),
             size = love.math.random(1, 3),
             char = love.math.random() < 0.3 and "●" or "○",
-            color = self.config.activeColors.accent,
+            color = config.activeColors.accent,
             trail = {}
         })
     end
@@ -126,7 +128,7 @@ function SubroutineChoiceState:enter(player)
     self.cacheAnalysis.active = true
     self.cacheAnalysis.progress = 0
 
-    love.graphics.setBackgroundColor(self.config.activeColors.background)
+    love.graphics.setBackgroundColor(config.activeColors.background)
 
     if self.events then
         self.events:emit("subroutine_choice_entered", {
@@ -175,9 +177,9 @@ function SubroutineChoiceState:update(dt)
         end
 
         -- Reset if off screen
-        if drop.y > self.config.nativeResolution.height + drop.length * 15 then
+        if drop.y > config.nativeResolution.height + drop.length * 15 then
             drop.y = -drop.length * 15
-            drop.x = love.math.random(0, self.config.nativeResolution.width)
+            drop.x = love.math.random(0, config.nativeResolution.width)
         end
     end
 
@@ -201,10 +203,10 @@ function SubroutineChoiceState:update(dt)
         end
 
         -- Wrap around screen
-        if particle.x < -10 then particle.x = self.config.nativeResolution.width + 10 end
-        if particle.x > self.config.nativeResolution.width + 10 then particle.x = -10 end
-        if particle.y < -10 then particle.y = self.config.nativeResolution.height + 10 end
-        if particle.y > self.config.nativeResolution.height + 10 then particle.y = -10 end
+        if particle.x < -10 then particle.x = config.nativeResolution.width + 10 end
+        if particle.x > config.nativeResolution.width + 10 then particle.x = -10 end
+        if particle.y < -10 then particle.y = config.nativeResolution.height + 10 end
+        if particle.y > config.nativeResolution.height + 10 then particle.y = -10 end
 
         -- Reset if expired
         if particle.life <= 0 then
@@ -285,15 +287,15 @@ function SubroutineChoiceState:generateAndFormatChoices()
 end
 
 function SubroutineChoiceState:drawEnhancedBackground()
-    local nativeW, nativeH = self.config.nativeResolution.width,
-        self.config.nativeResolution.height
+    local nativeW, nativeH = config.nativeResolution.width,
+        config.nativeResolution.height
 
     -- Base background
-    love.graphics.setColor(self.config.activeColors.background)
+    love.graphics.setColor(config.activeColors.background)
     love.graphics.rectangle("fill", 0, 0, nativeW, nativeH)
 
     -- Matrix rain effect
-    love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
+    love.graphics.setFont(fonts.small)
     for _, drop in ipairs(self.matrixRain) do
         for i, charData in ipairs(drop.chars) do
             local charY = drop.y + i * 12
@@ -304,9 +306,9 @@ function SubroutineChoiceState:drawEnhancedBackground()
                     love.graphics.setColor(1, 1, 1, alpha)
                 else
                     -- Fading trail
-                    love.graphics.setColor(self.config.activeColors.accent[1],
-                        self.config.activeColors.accent[2],
-                        self.config.activeColors.accent[3], alpha)
+                    love.graphics.setColor(config.activeColors.accent[1],
+                        config.activeColors.accent[2],
+                        config.activeColors.accent[3], alpha)
                 end
                 love.graphics.print(charData.char, drop.x, charY)
             end
@@ -314,31 +316,31 @@ function SubroutineChoiceState:drawEnhancedBackground()
     end
 
     -- Animated grid overlay
-    love.graphics.setColor(self.config.activeColors.accent[1],
-        self.config.activeColors.accent[2],
-        self.config.activeColors.accent[3], 0.1)
+    love.graphics.setColor(config.activeColors.accent[1],
+        config.activeColors.accent[2],
+        config.activeColors.accent[3], 0.1)
 
     local gridSize = 40
     local gridPhase = self.animationTime * 0.5
 
     for x = 0, nativeW, gridSize do
         local alpha = 0.05 + 0.05 * math.sin(gridPhase + x * 0.01)
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], alpha)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], alpha)
         love.graphics.line(x, 0, x, nativeH)
     end
 
     for y = 0, nativeH, gridSize do
         local alpha = 0.05 + 0.05 * math.sin(gridPhase + y * 0.01)
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], alpha)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], alpha)
         love.graphics.line(0, y, nativeW, y)
     end
 
     -- Data flow particles with trails
-    love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
+    love.graphics.setFont(fonts.small)
     for _, particle in ipairs(self.dataFlowParticles) do
         -- Draw trail
         for i, trailPoint in ipairs(particle.trail) do
@@ -359,23 +361,23 @@ function SubroutineChoiceState:drawEnhancedBackground()
         local alpha = effect.intensity * effect.flicker
 
         -- Holographic rectangle with distortion
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], alpha * 0.3)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], alpha * 0.3)
         love.graphics.rectangle("fill", effect.x + distortion, effect.y, effect.width, effect.height)
 
         -- Holographic border
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], alpha * 0.8)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], alpha * 0.8)
         love.graphics.rectangle("line", effect.x + distortion, effect.y, effect.width, effect.height)
 
         -- Scan lines
         for i = 0, effect.height, 3 do
             local lineAlpha = alpha * 0.4 * (0.8 + 0.2 * math.sin(self.animationTime * 4 + i))
-            love.graphics.setColor(self.config.activeColors.accent[1],
-                self.config.activeColors.accent[2],
-                self.config.activeColors.accent[3], lineAlpha)
+            love.graphics.setColor(config.activeColors.accent[1],
+                config.activeColors.accent[2],
+                config.activeColors.accent[3], lineAlpha)
             love.graphics.line(effect.x + distortion, effect.y + i,
                 effect.x + effect.width + distortion, effect.y + i)
         end
@@ -387,15 +389,15 @@ function SubroutineChoiceState:drawEnhancedBackground()
             local scanX = (self.cacheAnalysis.progress * (nativeW + 100)) - 50
             local alpha = scanLine.intensity * (1 - math.abs(self.cacheAnalysis.progress - 0.5) * 2)
 
-            love.graphics.setColor(self.config.activeColors.highlight[1],
-                self.config.activeColors.highlight[2],
-                self.config.activeColors.highlight[3], alpha)
+            love.graphics.setColor(config.activeColors.highlight[1],
+                config.activeColors.highlight[2],
+                config.activeColors.highlight[3], alpha)
             love.graphics.rectangle("fill", scanX, scanLine.y, 40, 2)
 
             -- Scan beam glow
-            love.graphics.setColor(self.config.activeColors.highlight[1],
-                self.config.activeColors.highlight[2],
-                self.config.activeColors.highlight[3], alpha * 0.3)
+            love.graphics.setColor(config.activeColors.highlight[1],
+                config.activeColors.highlight[2],
+                config.activeColors.highlight[3], alpha * 0.3)
             love.graphics.rectangle("fill", scanX - 20, scanLine.y - 1, 80, 4)
         end
     end
@@ -407,24 +409,24 @@ function SubroutineChoiceState:drawEnhancedBackground()
         local beamAlpha = self.integrationBeam.intensity * 0.6
 
         -- Main beam
-        love.graphics.setColor(self.config.activeColors.pickup[1],
-            self.config.activeColors.pickup[2],
-            self.config.activeColors.pickup[3], beamAlpha)
+        love.graphics.setColor(config.activeColors.pickup[1],
+            config.activeColors.pickup[2],
+            config.activeColors.pickup[3], beamAlpha)
         love.graphics.rectangle("fill", 0, beamY - 3, beamWidth, 6)
 
         -- Beam glow
-        love.graphics.setColor(self.config.activeColors.pickup[1],
-            self.config.activeColors.pickup[2],
-            self.config.activeColors.pickup[3], beamAlpha * 0.3)
+        love.graphics.setColor(config.activeColors.pickup[1],
+            config.activeColors.pickup[2],
+            config.activeColors.pickup[3], beamAlpha * 0.3)
         love.graphics.rectangle("fill", 0, beamY - 8, beamWidth, 16)
     end
 
     -- Transition scan effect
     if self.isTransitioning then
         local scanAlpha = (1 - self.transitionPhase) * 0.8
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], scanAlpha)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], scanAlpha)
 
         -- Multiple scanning beams
         for i = 0, 3 do
@@ -448,7 +450,6 @@ function SubroutineChoiceState:draw()
 
     BaseState.draw(self)
 
-    local config = self.config or _G.Config
     local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
 
     -- Enhanced animated background
@@ -464,18 +465,18 @@ function SubroutineChoiceState:draw()
     local pX, pY, pW, pH = UIHelpers.drawPanel(panelX, panelY, panelW, panelH, self.title, "highlighted")
 
     -- Enhanced player status with animations
-    love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).medium)
+    love.graphics.setFont(fonts.medium)
     local statusPulse = 0.8 + 0.2 * math.sin(self.animationTime * 2)
     local statusText = string.format("ACTIVE_PROCESS: %s | CPU: %d/%d | INTEGRITY: %d%%",
         self.player.name, self.player.cpuCycles, self.player.maxCPUCycles,
         math.floor((self.player.hp / self.player.maxHp) * 100))
 
     UIHelpers.drawHolographicText(statusText,
-        pX + pW / 2 - (self.resources and self.resources:getFonts() or _G.Fonts).medium:getWidth(statusText) / 2,
-        pY + 15, (self.resources and self.resources:getFonts() or _G.Fonts).medium,
-        { self.config.activeColors.accent[1] * statusPulse,
-            self.config.activeColors.accent[2] * statusPulse,
-            self.config.activeColors.accent[3] * statusPulse, 1 },
+        pX + pW / 2 - fonts.medium:getWidth(statusText) / 2,
+        pY + 15, fonts.medium,
+        { config.activeColors.accent[1] * statusPulse,
+            config.activeColors.accent[2] * statusPulse,
+            config.activeColors.accent[3] * statusPulse, 1 },
         self.animationTime)
 
     local currentContentY = pY + 50
@@ -485,12 +486,12 @@ function SubroutineChoiceState:draw()
         local errorText = self.displayListItems[1] and self.displayListItems[1].text or
             "ERROR: No integration options available."
         UIHelpers.drawHolographicText(errorText,
-            pX + pW / 2 - (self.resources and self.resources:getFonts() or _G.Fonts).medium:getWidth(errorText) / 2,
-            currentContentY + 80, (self.resources and self.resources:getFonts() or _G.Fonts).medium,
+            pX + pW / 2 - fonts.medium:getWidth(errorText) / 2,
+            currentContentY + 80, fonts.medium,
             { 1, 0.5, 0.5, 1 }, self.animationTime)
     else
         -- Enhanced selectable list with better visual hierarchy
-        love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
+        love.graphics.setFont(fonts.small)
         local itemHeight = 90 -- Increased for better spacing and detail
         self:drawEnhancedIntegrationList(self.displayListItems, self.selectedOption,
             pX + 15, currentContentY, pW - 30,
@@ -500,12 +501,12 @@ function SubroutineChoiceState:draw()
     -- Enhanced controls with animated effects
     local controlsY = nativeH - 40
     local controlsPulse = 0.6 + 0.4 * math.sin(self.animationTime * 1.5)
-    local controlsColor = { self.config.activeColors.ui_text_dim[1] * controlsPulse,
-        self.config.activeColors.ui_text_dim[2] * controlsPulse,
-        self.config.activeColors.ui_text_dim[3] * controlsPulse, 1 }
+    local controlsColor = { config.activeColors.ui_text_dim[1] * controlsPulse,
+        config.activeColors.ui_text_dim[2] * controlsPulse,
+        config.activeColors.ui_text_dim[3] * controlsPulse, 1 }
 
     UIHelpers.drawTextWithGlow("INTERFACE: ↑↓ Navigate | ENTER Integrate | ESC Abort",
-        nativeW / 2, controlsY, (self.resources and self.resources:getFonts() or _G.Fonts).small,
+        nativeW / 2, controlsY, fonts.small,
         controlsColor, "center", 0.3)
 end
 
@@ -515,16 +516,16 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
     maxVisibleItems = maxVisibleItems or #items
 
     -- Enhanced background for the integration chamber
-    love.graphics.setColor(self.config.activeColors.background[1],
-        self.config.activeColors.background[2],
-        self.config.activeColors.background[3], 0.8)
+    love.graphics.setColor(config.activeColors.background[1],
+        config.activeColors.background[2],
+        config.activeColors.background[3], 0.8)
     UIHelpers.drawRoundedRect(x - 12, y - 8, width + 24, maxVisibleItems * itemHeight + 16, 10, "fill")
 
     -- Integration chamber border with glow
     local chamberGlow = 0.6 + 0.4 * math.sin(self.animationTime * 2)
-    love.graphics.setColor(self.config.activeColors.highlight[1],
-        self.config.activeColors.highlight[2],
-        self.config.activeColors.highlight[3], chamberGlow * 0.4)
+    love.graphics.setColor(config.activeColors.highlight[1],
+        config.activeColors.highlight[2],
+        config.activeColors.highlight[3], chamberGlow * 0.4)
     UIHelpers.drawRoundedRect(x - 12, y - 8, width + 24, maxVisibleItems * itemHeight + 16, 10, "line")
 
     for i = 1, maxVisibleItems do
@@ -543,7 +544,7 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
             local integrationGlow = 0.5 + 0.5 * math.sin(self.animationTime * 6)
 
             -- Multi-layer selection background with integration theme
-            local highlightColor = self.config.activeColors.highlight
+            local highlightColor = config.activeColors.highlight
 
             -- Outer integration field
             love.graphics.setColor(highlightColor[1], highlightColor[2], highlightColor[3], 0.2 * pulse)
@@ -561,7 +562,7 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
 
             -- Data stream indicators
             love.graphics.setColor(highlightColor)
-            love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).medium)
+            love.graphics.setFont(fonts.medium)
             local indicatorAlpha = 0.7 + 0.3 * math.sin(self.animationTime * 8)
             love.graphics.setColor(highlightColor[1], highlightColor[2], highlightColor[3], indicatorAlpha)
 
@@ -569,10 +570,10 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
             local bracketOffset = math.sin(self.animationTime * 4) * 2
             love.graphics.print(">>", x - 30 - bracketOffset,
                 currentY + itemHeight / 2 -
-                (self.resources and self.resources:getFonts() or _G.Fonts).medium:getHeight() / 2)
+                fonts.medium:getHeight() / 2)
             love.graphics.print("<<", x + width + 12 + bracketOffset,
                 currentY + itemHeight / 2 -
-                (self.resources and self.resources:getFonts() or _G.Fonts).medium:getHeight() / 2)
+                fonts.medium:getHeight() / 2)
 
             -- Integration particles
             for j = 1, 8 do
@@ -602,31 +603,31 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
             love.graphics.setColor(0.7, 0.3, 0.3, 1)
 
             -- Corruption indicators
-            love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
+            love.graphics.setFont(fonts.small)
             love.graphics.print(">> CORRUPTED DATA <<", x, currentY)
         else
             -- Subtle available state with data ready indicators
             local readyAlpha = 0.05 + 0.03 * math.sin(self.animationTime * 1.5 + itemActualIndex)
-            love.graphics.setColor(self.config.activeColors.text[1],
-                self.config.activeColors.text[2],
-                self.config.activeColors.text[3], readyAlpha)
+            love.graphics.setColor(config.activeColors.text[1],
+                config.activeColors.text[2],
+                config.activeColors.text[3], readyAlpha)
             UIHelpers.drawRoundedRect(x - 5, currentY - 2, width + 10, itemHeight - 4, 4, "fill")
 
-            love.graphics.setColor(self.config.activeColors.text)
+            love.graphics.setColor(config.activeColors.text)
 
             -- Data ready indicators
-            love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
+            love.graphics.setFont(fonts.small)
             local readyPulse = 0.6 + 0.4 * math.sin(self.animationTime * 3 + itemActualIndex)
-            love.graphics.setColor(self.config.activeColors.accent[1],
-                self.config.activeColors.accent[2],
-                self.config.activeColors.accent[3], readyPulse * 0.4)
+            love.graphics.setColor(config.activeColors.accent[1],
+                config.activeColors.accent[2],
+                config.activeColors.accent[3], readyPulse * 0.4)
             love.graphics.print("○", x - 15,
                 currentY + itemHeight / 2 -
-                (self.resources and self.resources:getFonts() or _G.Fonts).small:getHeight() / 2)
+                fonts.small:getHeight() / 2)
         end
 
         -- Multi-line text with enhanced formatting and type indicators
-        love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
+        love.graphics.setFont(fonts.small)
 
         -- Text shadow for better readability
         if isSelected then
@@ -637,27 +638,27 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
         -- Main text with appropriate coloring and type-based styling
         if isSelected then
             local textPulse = 0.9 + 0.1 * math.sin(self.animationTime * 4)
-            love.graphics.setColor(self.config.activeColors.text[1] * textPulse,
-                self.config.activeColors.text[2] * textPulse,
-                self.config.activeColors.text[3] * textPulse, 1)
+            love.graphics.setColor(config.activeColors.text[1] * textPulse,
+                config.activeColors.text[2] * textPulse,
+                config.activeColors.text[3] * textPulse, 1)
         elseif item.disabled then
             love.graphics.setColor(0.6, 0.4, 0.4, 1)
         else
-            love.graphics.setColor(self.config.activeColors.text)
+            love.graphics.setColor(config.activeColors.text)
         end
 
         love.graphics.printf(displayText, x, currentY, width, "left")
 
         -- Integration type indicators
         if not item.disabled then
-            love.graphics.setFont((self.resources and self.resources:getFonts() or _G.Fonts).small)
-            local typeColor = self.config.activeColors.accent
+            love.graphics.setFont(fonts.small)
+            local typeColor = config.activeColors.accent
             if item.type == "new" then
-                typeColor = self.config.activeColors.pickup
+                typeColor = config.activeColors.pickup
                 love.graphics.setColor(typeColor[1], typeColor[2], typeColor[3], 0.8)
                 love.graphics.print("[NEW]", x + width - 40, currentY + 5)
             elseif item.type == "upgrade" then
-                typeColor = self.config.activeColors.highlight
+                typeColor = config.activeColors.highlight
                 love.graphics.setColor(typeColor[1], typeColor[2], typeColor[3], 0.8)
                 love.graphics.print("[UPG]", x + width - 40, currentY + 5)
             end
@@ -672,15 +673,15 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
 
         -- Animated track with data flow
         local trackPulse = 0.4 + 0.2 * math.sin(self.animationTime * 2)
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], trackPulse)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], trackPulse)
         UIHelpers.drawRoundedRect(scrollbarX, y, scrollbarWidth, scrollbarHeight, 5, "fill")
 
         -- Track border with integration glow
-        love.graphics.setColor(self.config.activeColors.accent[1],
-            self.config.activeColors.accent[2],
-            self.config.activeColors.accent[3], 0.9)
+        love.graphics.setColor(config.activeColors.accent[1],
+            config.activeColors.accent[2],
+            config.activeColors.accent[3], 0.9)
         UIHelpers.drawRoundedRect(scrollbarX, y, scrollbarWidth, scrollbarHeight, 5, "line")
 
         -- Animated thumb with data indicators
@@ -693,9 +694,9 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
 
         -- Thumb with enhanced integration animation
         local thumbPulse = 0.8 + 0.4 * math.sin(self.animationTime * 4)
-        love.graphics.setColor(self.config.activeColors.highlight[1] * thumbPulse,
-            self.config.activeColors.highlight[2] * thumbPulse,
-            self.config.activeColors.highlight[3] * thumbPulse, 0.95)
+        love.graphics.setColor(config.activeColors.highlight[1] * thumbPulse,
+            config.activeColors.highlight[2] * thumbPulse,
+            config.activeColors.highlight[3] * thumbPulse, 0.95)
         UIHelpers.drawRoundedRect(scrollbarX, thumbY, scrollbarWidth, thumbHeight, 5, "fill")
 
         -- Data flow effect on thumb
@@ -707,9 +708,9 @@ function SubroutineChoiceState:drawEnhancedIntegrationList(items, selectedIndex,
         for i = 0, 2 do
             local indicatorY = y + (i / 2) * scrollbarHeight
             local indicatorAlpha = 0.4 + 0.6 * math.sin(self.animationTime * 3 + i)
-            love.graphics.setColor(self.config.activeColors.highlight[1],
-                self.config.activeColors.highlight[2],
-                self.config.activeColors.highlight[3], indicatorAlpha)
+            love.graphics.setColor(config.activeColors.highlight[1],
+                config.activeColors.highlight[2],
+                config.activeColors.highlight[3], indicatorAlpha)
             love.graphics.circle("fill", scrollbarX + scrollbarWidth / 2, indicatorY, 2)
         end
     end
@@ -722,9 +723,10 @@ function SubroutineChoiceState:keypressed(key)
     if #self.displayListItems == 0 or (#self.displayListItems == 1 and self.displayListItems[1].type == "none") then
         if key == "escape" or key == "return" or key == "kpenter" then
             -- Return to gameplay using legacy bridge temporarily
-            if _G.GameState then
-                _G.GameState.switch("gameplay")
-                local gameplay = _G.GameState.get("gameplay")
+            local stateManager = ServiceLocator.get("states")
+            if stateManager then
+                stateManager.switch("gameplay")
+                local gameplay = stateManager.get("gameplay")
                 if gameplay and gameplay.resume then gameplay:resume() end
             end
         end
@@ -736,7 +738,7 @@ function SubroutineChoiceState:keypressed(key)
         if self.selectedOption < self.scrollOffset + 1 then
             self.scrollOffset = math.max(0, self.selectedOption - 1)
         end
-        _G.SFX.play("ui_navigate")
+        ServiceLocator.get("sfx").play("ui_navigate")
         self:triggerSelectionEffect()
     elseif key == "down" then
         self.selectedOption = math.min(#self.choices, self.selectedOption + 1)
@@ -744,10 +746,10 @@ function SubroutineChoiceState:keypressed(key)
             self.scrollOffset = math.min(#self.choices - self.itemsPerPage, self.selectedOption - self.itemsPerPage)
             self.scrollOffset = math.max(0, self.scrollOffset)
         end
-        _G.SFX.play("ui_navigate")
+        ServiceLocator.get("sfx").play("ui_navigate")
         self:triggerSelectionEffect()
     elseif key == "return" or key == "kpenter" then
-        _G.SFX.play("ui_select")
+        ServiceLocator.get("sfx").play("ui_select")
         self:triggerIntegrationEffect()
 
         local chosenRawData = self.choices[self.selectedOption]
@@ -769,7 +771,7 @@ function SubroutineChoiceState:keypressed(key)
                 --if gameplay then
                 --    local subDef = SubroutineDB.getById(chosenRawData.subroutineId)
                 --    gameplay:logMessage("INTEGRATION_COMPLETE: " .. subDef.name,
-                --        self.config.activeColors.pickup)
+                --        config.activeColors.pickup)
                 --end
             elseif chosenRawData.type == "upgrade" then
                 self.player:upgradeSubroutine(chosenRawData.subroutineInstance)
@@ -785,7 +787,7 @@ function SubroutineChoiceState:keypressed(key)
 
                 --if gameplay then
                 --    gameplay:logMessage("UPGRADE_COMPLETE: " .. chosenRawData.subroutineInstance:getName(),
-                --        self.config.activeColors.pickup)
+                --        config.activeColors.pickup)
                 --end
             end
         else
@@ -797,7 +799,7 @@ function SubroutineChoiceState:keypressed(key)
             end
             --if gameplay then
             --    gameplay:logMessage("CACHE_ANALYSIS_FAILED: No compatible data found.",
-            --        self.config.activeColors.text)
+            --        config.activeColors.text)
             --end
         end
 
@@ -807,7 +809,7 @@ function SubroutineChoiceState:keypressed(key)
         -- Return to gameplay
         self.stateManager:pop()
     elseif key == "escape" then
-        _G.SFX.play("ui_back")
+        ServiceLocator.get("sfx").play("ui_back")
 
         -- Emit event
         if self.events then
@@ -816,13 +818,6 @@ function SubroutineChoiceState:keypressed(key)
             })
         end
 
-        --local gameplay = _G.GameState and _G.GameState.get("gameplay") or nil
-        --if gameplay then
-        --    gameplay:logMessage("INTEGRATION_ABORTED: Cache remains sealed.",
-        --        self.config.activeColors.text)
-        --end
-
-        -- Return to gameplay
         self.stateManager:pop()
     end
     return true
@@ -835,7 +830,7 @@ function SubroutineChoiceState:triggerSelectionEffect()
     -- Add selection particles
     for i = 1, 5 do
         table.insert(self.dataFlowParticles, {
-            x = self.config.nativeResolution.width / 2,
+            x = config.nativeResolution.width / 2,
             y = 150 + (self.selectedOption - 1) * 90,
             vx = love.math.random(-50, 50),
             vy = love.math.random(-30, 30),
@@ -843,7 +838,7 @@ function SubroutineChoiceState:triggerSelectionEffect()
             maxLife = 1.5,
             size = 2,
             char = "◦",
-            color = self.config.activeColors.highlight,
+            color = config.activeColors.highlight,
             trail = {}
         })
     end
@@ -858,15 +853,15 @@ function SubroutineChoiceState:triggerIntegrationEffect()
     -- Add integration particles
     for i = 1, 15 do
         table.insert(self.dataFlowParticles, {
-            x = love.math.random(0, self.config.nativeResolution.width),
-            y = self.config.nativeResolution.height / 2,
+            x = love.math.random(0, config.nativeResolution.width),
+            y = config.nativeResolution.height / 2,
             vx = love.math.random(-100, 100),
             vy = love.math.random(-50, 50),
             life = 2,
             maxLife = 2,
             size = 3,
             char = "●",
-            color = self.config.activeColors.pickup,
+            color = config.activeColors.pickup,
             trail = {}
         })
     end

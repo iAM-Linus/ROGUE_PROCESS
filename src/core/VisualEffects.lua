@@ -1,4 +1,6 @@
--- Add this new file: src/core/VisualEffects.lua
+-- src/core/VisualEffects.lua
+local config = ServiceLocator.get("config")
+
 local VisualEffects = {}
 
 function VisualEffects.drawGlitchText(text, x, y, font, color, glitchIntensity)
@@ -25,8 +27,8 @@ function VisualEffects.drawDataStream(x, y, width, height, speed, density)
     density = density or 0.1
     
     local time = love.timer.getTime() * speed
-    love.graphics.setColor(Config.activeColors.accent[1], Config.activeColors.accent[2], 
-                          Config.activeColors.accent[3], 0.3)
+    love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                          config.activeColors.accent[3], 0.3)
     
     for i = 0, width, 10 do
         local streamY = (y + (time + i * 2) % (height + 20)) - 20
@@ -63,35 +65,5 @@ function VisualEffects.drawHologramEffect(drawFunction, intensity)
     love.graphics.setColor(1, 1, 1, 1)
     drawFunction()
 end
-
---[[
-INTEGRATION CHECKLIST:
-
-□ 1. Replace src/ui/ui_helpers.lua with the modern version
-□ 2. Replace src/core/managers/HUDManager.lua with the modern version  
-□ 3. Update GameplayState constructor to use hudManager instead of hudRoot
-□ 4. Update GameplayState:draw() method to use hudManager:draw()
-□ 5. Remove or comment out old HUD methods in GameplayState
-□ 6. Update src/states/MainMenuState.lua with enhanced version
-□ 7. Update src/states/SubroutineChoiceState.lua with enhanced version
-□ 8. Update src/states/CoreModificationState.lua with enhanced version
-□ 9. Add enhanced colors to your config.lua
-□ 10. Add src/core/VisualEffects.lua file
-□ 11. Test each state to ensure proper integration
-
-OPTIONAL ENHANCEMENTS:
-□ Add particle system for menu backgrounds
-□ Implement smooth transitions between states
-□ Add sound effects for UI interactions (already in your SFX system)
-□ Add gamepad/controller support for UI navigation
-□ Implement UI themes/skins system
-□ Add screen reader accessibility support
-
-PERFORMANCE NOTES:
-- The new UI system uses more draw calls but provides much better visuals
-- Consider disabling some effects on lower-end systems
-- Particle effects can be toggled via Config.visualEffects.enableParticles
-- Use Config.visualEffects.enableGlow to toggle glow effects
---]]
 
 return VisualEffects

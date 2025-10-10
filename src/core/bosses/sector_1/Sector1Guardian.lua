@@ -1,6 +1,5 @@
 -- src/core/enemies/Sector1Guardian.lua
 local Boss = require "src.core.bosses.Boss"
-local Config = require "src.config"
 
 local Sector1Guardian = {}
 Sector1Guardian.__index = Sector1Guardian

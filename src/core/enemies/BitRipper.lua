@@ -7,7 +7,7 @@ BitRipper.__index = BitRipper
 setmetatable(BitRipper, {__index = Enemy})
 
 function BitRipper:new(x, y)
-    local instance = Enemy:new(x, y, "BIT_RIPPER_SPRITE", _G.Config.activeColors.enemy, "BIT_RIPPER", 20, true, EnemyAI_DB.BitRipper) -- Moderate HP
+    local instance = Enemy:new(x, y, "BIT_RIPPER_SPRITE", ServiceLocator.get("config").activeColors.enemy, "BIT_RIPPER", 20, true, EnemyAI_DB.BitRipper) -- Moderate HP
     setmetatable(instance, BitRipper)
 
     instance.rangedAttackDamage = 7

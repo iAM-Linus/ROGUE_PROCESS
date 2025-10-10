@@ -7,7 +7,7 @@ DataLeech.__index = DataLeech
 setmetatable(DataLeech, {__index = Enemy}) -- Inherit from Enemy
 
 function DataLeech:new(x, y)
-    local instance = Enemy:new(x, y, "DATA_LEECH_SPRITE", _G.Config.activeColors.enemy, "DATA_LEECH", 25, true, EnemyAI_DB.DataLeech) -- Magenta, 25 HP
+    local instance = Enemy:new(x, y, "DATA_LEECH_SPRITE", ServiceLocator.get("config").activeColors.enemy, "DATA_LEECH", 25, true, EnemyAI_DB.DataLeech) -- Magenta, 25 HP
     setmetatable(instance, DataLeech)
 
     -- visionRadius is inherited from Enemy (default 7), can override if needed

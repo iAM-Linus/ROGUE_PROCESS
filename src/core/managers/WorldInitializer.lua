@@ -16,6 +16,8 @@ local BitRipper = require 'src.core.enemies.BitRipper'
 local Sector1Guardian = require 'src.core.bosses.sector_1.Sector1Guardian'
 local EnemyAI_DB = require "src/core/ai/EnemyAI_DB"
 
+local config = ServiceLocator.get("config")
+
 local WorldInitializer = {}
 
 -- Main function to set up a new game level or a completely new run.
@@ -33,19 +35,19 @@ function WorldInitializer.setupLevel(gs, isNewRun)
         GlitchSwarmer.resetGlobalCount()
         gs.gameMessageLog = {} -- Clear log only for a completely new run
 
-        local selectedCoreId = _G.MetaProgress:getSelectedAICoreId()
+        local selectedCoreId = ServiceLocator.get("metaProgress"):getSelectedAICoreId()
         local selectedCoreData = AICoreDB.getById(selectedCoreId)
         if not selectedCoreData then
             print("  Warning: SelectedAICoreId '" .. tostring(selectedCoreId) .. "' not found. Defaulting.")
             selectedCoreData = AICoreDB.getById("standard_pid")
-            _G.MetaProgress:setSelectedAICoreId("standard_pid")
+            ServiceLocator.get("metaProgress"):setSelectedAICoreId("standard_pid")
         end
         
         gs.player = Player:new(0, 0, selectedCoreData) -- Position set after map gen
         
         if selectedCoreData.passivePerk and selectedCoreData.passivePerk.apply then
             if selectedCoreData.passivePerk.description then
-                 gs:logMessage("Core Perk Active (" .. selectedCoreData.passivePerk.name .. "): " .. selectedCoreData.passivePerk.description, _G.Config.activeColors.pickup)
+                 gs:logMessage("Core Perk Active (" .. selectedCoreData.passivePerk.name .. "): " .. selectedCoreData.passivePerk.description, config.activeColors.pickup)
             end
         end
         gs.entities = {} 
@@ -78,7 +80,7 @@ function WorldInitializer.setupLevel(gs, isNewRun)
     if generateAsBossFloor then
         WorldInitializer.generateBossMap(gs)
     else
-        gs.map = Map:new(_G.Config.mapWidth, _G.Config.mapHeight)
+        gs.map = Map:new(config.mapWidth, config.mapHeight)
     end
     if not gs.map or not gs.map.playerSpawn or not gs.map.playerSpawn.x then
         error("FATAL: Map generation failed or produced no playerSpawn!")
@@ -113,7 +115,7 @@ function WorldInitializer.setupLevel(gs, isNewRun)
     local nodeType = generateAsBossFloor and "(BOSS ENCOUNTER)" or ""
     local entryMessage = isNewRun and ("SYSTEM: " .. gs.player.name .. " initialized in Node.") or 
                                    string.format("ENTERING NODE: SECTOR %d, LEVEL %d %s", gs.currentSector, gs.currentFloorInSector, nodeType)
-    gs:logMessage(entryMessage, _G.Config.activeColors.accent)
+    gs:logMessage(entryMessage, config.activeColors.accent)
     
     gs.isEnemyActionResolving = false
     gs.enemyActionDelayTimer = 0
@@ -126,13 +128,13 @@ end
 -- Helper: Generate Boss Map (moved from GameplayState)
 function WorldInitializer.generateBossMap(gs)
     print("  [WorldInit - generateBossMap] Start.")
-    local bossMapW = math.floor(_G.Config.mapWidth * 0.7) -- Slightly larger boss maps
-    local bossMapH = math.floor(_G.Config.mapHeight * 0.7)
+    local bossMapW = math.floor(config.mapWidth * 0.7) -- Slightly larger boss maps
+    local bossMapH = math.floor(config.mapHeight * 0.7)
     gs.map = Map:new(bossMapW, bossMapH) 
     if not gs.map.playerSpawn or not gs.map.playerSpawn.x then
         print("    Warning: Boss map from Map:new has no playerSpawn! Fallback needed.")
         if #gs.map.floorTiles > 0 then gs.map.playerSpawn = Helpers.deepCopy(gs.map.floorTiles[1])
-        else gs.map.playerSpawn = {x = math.floor(bossMapW/2), y = math.floor(bossMapH/2)}; gs.map.tiles[gs.map.playerSpawn.y][gs.map.playerSpawn.x] = _G.Config.tile.FLOOR; end
+        else gs.map.playerSpawn = {x = math.floor(bossMapW/2), y = math.floor(bossMapH/2)}; gs.map.tiles[gs.map.playerSpawn.y][gs.map.playerSpawn.x] = config.tile.FLOOR; end
     end
     if gs.map.exitPortal then gs.map.exitPortal.char = "O" end
     print(string.format("  [WorldInit - generateBossMap] Done. PlayerSpawn: (%s,%s)", tostring(gs.map.playerSpawn.x), tostring(gs.map.playerSpawn.y)))

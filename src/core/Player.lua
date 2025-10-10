@@ -9,15 +9,20 @@ Player.__index = Player
 setmetatable(Player, {__index = Entity}) -- Inherit from Entity
 
 function Player:new(x, y, aiCoreData)
+    -- Get services
+    local config = ServiceLocator.get("config")
+    local metaProgress = ServiceLocator.get("metaProgress")
+
     if not aiCoreData then
         print("ERROR: Player:new() called without aiCoreData. Using fallback.")
-        aiCoreData = AICoreDB.getById(_G.SelectedAICoreId or "standard_pid") -- Fallback
+        local selectedCoreId = metaProgress:getSelectedAICoreId() or "standard_pid"
+        aiCoreData = AICoreDB.getById(selectedCoreId) -- Fallback
         if not aiCoreData then aiCoreData = AICoreDB.Cores.standard_pid end -- Absolute fallback
     end
 
     local quadName = aiCoreData.quadName or "PLAYER_STANDARD"
-    local char = aiCoreData.char or _G.Config.playerChar
-    local color = aiCoreData.color or _G.Config.activeColors.player
+    local char = aiCoreData.char or config.playerChar
+    local color = aiCoreData.color or config.activeColors.player
     local name = aiCoreData.name or "PID_PLAYER_UNKNOWN"
     local initialHp = aiCoreData.baseStats.hp
     
@@ -45,15 +50,11 @@ function Player:new(x, y, aiCoreData)
     -- Grant starting subroutine
     if aiCoreData.startingSubroutineId then
         instance:learnSubroutine(aiCoreData.startingSubroutineId)
-        -- Ensure the learned subroutine doesn't immediately put player in negative CPU if it has a cost
-        -- (This is usually not an issue as learning is free, using it costs)
     end
 
     -- Apply passive perk if any
     if aiCoreData.passivePerk and aiCoreData.passivePerk.apply then
         aiCoreData.passivePerk.apply(instance)
-        -- Log the perk application if GameplayState is available (tricky from here)
-        -- This might be better handled in GameplayState:initNewLevel after player is created
     end
     
     print(string.format("Player created with AI Core: %s. HP:%d, CPU:%d, Sub:%s", 
@@ -62,57 +63,14 @@ function Player:new(x, y, aiCoreData)
     return instance
 end
 
---function Player:draw(tileX, tileY, tileSize)
---    local gameplayState = _G.Game.states:getCurrent() -- Get current gameplay state for context
---
---    -- Default drawing behavior from Entity
---    -- Entity.draw(self, tileX, tileY, tileSize) -- This would draw the original character and color
---
---    -- Player-specific visual modifications
---    local r, g, b, a = self.color[1], self.color[2], self.color[3], self.color[4] or 1
---    local charToDraw = self.char
---    local fontToUse = _G.Fonts.medium -- Default entity font
---
---    if gameplayState and gameplayState.turnManager and gameplayState.turnManager.isPlayerTurn and 
---       self.actionTaken == false and not gameplayState.isEnemyActionResolving and
---       gameplayState.currentMode == gameplayState.Mode.PLAYER_TURN then
---        -- It's player's turn, player hasn't acted, and game is awaiting player input
---        
---        -- Subtle brightness pulse for the player character's color
---        local pulseBrightness = (math.sin(love.timer.getTime() * 6) + 1) / 2 -- Oscillates 0 to 1
---        local brightnessBoost = 0.3 -- How much brighter it gets
---        
---        -- Apply boost mainly to green component for a typical player color
---        g = math.min(1, g + pulseBrightness * brightnessBoost)
---        -- You could also make r and b slightly brighter too if desired
---        r = math.min(1, r + pulseBrightness * brightnessBoost * 0.5)
---        b = math.min(1, b + pulseBrightness * brightnessBoost * 0.5)
---
---        -- Example: Blinking player character (alternative to color pulse)
---        -- if not _G.showBlinker then -- Assuming _G.showBlinker is your global blink flag
---        --     return -- Don't draw the player character if blinker is off
---        -- end
---    end
---
---    love.graphics.setColor(r, g, b, a)
---    love.graphics.setFont(fontToUse)
---    love.graphics.print(charToDraw, 
---                        tileX + tileSize / 2 - (fontToUse:getWidth(charToDraw) / 2), 
---                        tileY + tileSize / 2 - (fontToUse:getHeight() / 2))
---    
---    -- If you wanted to draw something else on top of/around the player, do it here.
---    -- For example, if player has a strong shield effect, draw a border around their tile:
---    -- if self:hasStatusEffect("strong_shield_visual") then
---    --     love.graphics.setColor(Config.activeColors.accent[1], Config.activeColors.accent[2], Config.activeColors.accent[3], 0.5)
---    --     love.graphics.rectangle("line", tileX, tileY, tileSize, tileSize)
---    -- end
---end
+function Player:regenerateCPU()
+    self.cpuCycles = math.min(self.maxCPUCycles, self.cpuCycles + self.cpuRegenRate)
+end
 
 
 -- ===== Subroutines =====
 function Player:learnSubroutine(subroutineId)
-    if #self.subroutines >= self.maxSubroutines then -- Or handle differently if no slot limit
-        -- For now, just log, later could allow replacing
+    if #self.subroutines >= self.maxSubroutines then
         print("Cannot learn " .. subroutineId .. ". Max subroutines reached.")
         return nil
     end
@@ -155,6 +113,9 @@ function Player:addCoreModificationFlag(modId)
     self.coreModificationFlags[modId] = true
 end
 
+--- Purchase core modification
+---@param modId string : Modification identifier
+---@return boolean, string : success, message
 function Player:purchaseCoreModification(modId)
     local modDef = CoreModificationDB.getById(modId)
     if not modDef then return false, "Modification not found." end
@@ -179,15 +140,10 @@ function Player:purchaseCoreModification(modId)
     self.dataFragments = self.dataFragments - cost
     self.coreModifications[modId] = currentLevel + 1
     
+    -- Apply the effect, passing events service for logging
     if modDef.applyEffect then
-        local gameplayStateInstance = _G.GameState.get("gameplay") -- Get GameplayState instance
-        if gameplayStateInstance then
-            modDef.applyEffect(self, self.coreModifications[modId]) -- Pass it
-        else
-            print("ERROR: GameplayState instance not found when applying core mod effect for " .. modId)
-            -- Fallback or handle error if gameplay state is essential for the effect
-            -- For effects that don't log, this might be okay, but logging will be missed.
-        end
+        local events = ServiceLocator.get("events")
+        modDef.applyEffect(self, self.coreModifications[modId], events)
     end
     
     return true, modDef.name .. " acquired/upgraded."
@@ -195,6 +151,10 @@ end
 
 -- Override takeDamage to account for shield
 function Player:takeDamage(amount, attackerName)
+    local config = ServiceLocator.get("config")
+    local stateManager = ServiceLocator.get("states")
+    local gameplayState = stateManager:getCurrent()
+    local fonts = ServiceLocator.get("fonts")
     local actualAmount = amount
     local shieldEffect = nil
 
@@ -210,59 +170,60 @@ function Player:takeDamage(amount, attackerName)
         local absorbed = math.min(actualAmount, shieldEffect.data.amount)
         shieldEffect.data.amount = shieldEffect.data.amount - absorbed
         actualAmount = actualAmount - absorbed
-        local shieldMsg = string.format("%s absorbs %d damage! (Shield: %d remaining)", shieldEffect.name or "Shield", absorbed, shieldEffect.data.amount)
-        _G.Game.states:getCurrent():logMessage(shieldMsg, _G.Config.activeColors.accent)
+        local shieldMsg = string.format("%s absorbs %d damage! (Shield: %d remaining)", 
+            shieldEffect.name or "Shield", absorbed, shieldEffect.data.amount)
+        gameplayState:logMessage(shieldMsg, config.activeColors.accent)
+
         if shieldEffect.data.amount <= 0 then
-             _G.Game.states:getCurrent():logMessage(shieldEffect.name .. " depleted!", _G.Config.activeColors.accent)
-             -- Optionally remove the effect immediately when depleted, or let duration handle it
-             -- For now, let duration handle removal. Just set amount to 0.
+            gameplayState:logMessage(shieldEffect.name .. " depleted!", config.activeColors.accent)
         end
     end
 
     if actualAmount <= 0 then -- All damage absorbed
-        -- Spawn "Absorbed" particle?
-        local gameplayState = _G.Game.states:getCurrent()
         if gameplayState and gameplayState.ParticleFX then
-        gameplayState.ParticleFX.spawnFloatingText(gameplayState, "ABSORBED", self.x, self.y, {
-            color = {0.7, 0.7, 1, 1}, font = _G.Fonts.small, duration = 0.7, vy = -20
+            gameplayState.ParticleFX.spawnFloatingText(gameplayState, "ABSORBED", self.x, self.y, {
+            color = {0.7, 0.7, 1, 1},
+            font = fonts.small,
+            duration = 0.7,
+            vy = -20
         })
-    end
+        end
         return string.format("%s's attack fully absorbed...", attackerName or "Attack")
     end
 
-    -- Apply remaining damage (copied from base Entity:takeDamage logic)
+    -- Apply remaining damage
     self.hp = self.hp - actualAmount
 
-    local gameplayState = _G.Game.states:getCurrent()
     if gameplayState and gameplayState.triggerScreenShake then
-        local shakeIntensity = 5 -- Player getting hit might feel more impactful
+        local shakeIntensity = 5
         if actualAmount > self.maxHp * 0.3 then
-            shakeIntensity = 10 -- Stronger shake for big hits on player
+            shakeIntensity = 10
         end
         gameplayState:triggerScreenShake(shakeIntensity)
     end
 
      -- Spawn Player Damage Particle
-    if gameplayState and ParticleFX and amount > 0 then -- Check amount > 0 for damage numbers
+    if gameplayState and gameplayState.ParticleFX and amount > 0 then
         local damageColor = {1, 0.2, 0.2, 1} 
         if self == gameplayState.player then damageColor = {1, 0.5, 0.2, 1} end
-        ParticleFX.spawnFloatingText(gameplayState, "-" .. tostring(amount), self.x, self.y, {
+        gameplayState.ParticleFX.spawnFloatingText(gameplayState, "-" .. tostring(amount), self.x, self.y, {
             color = damageColor,
-            font = _G.Fonts.medium, -- Can be part of options
-            vy = -35, ay = 70      -- Customize motion
+            font = fonts.medium,
+            vy = -35,
+            ay = 70
         })
     end
 
     local message = string.format("%s takes %d damage from %s.", self.name, actualAmount, attackerName or "UNKNOWN_SOURCE")
     if self.hp <= 0 then
         self.hp = 0
-        self:die() -- Calls Player:die
+        self:die()
         message = message .. " " .. self.name .. " is destroyed!"
     end
     return message
 end
 
-function Player:endTurnUpdate() -- Call this at the end of player's turn
+function Player:endTurnUpdate()
     -- Tick subroutine cooldowns
     for _, sub in ipairs(self.subroutines) do
         sub:tickCooldown()
@@ -271,13 +232,13 @@ function Player:endTurnUpdate() -- Call this at the end of player's turn
     self:regenerateCPU()
 end
 
-function Player:takeTurn(dx, dy, map, gameplayState) -- Added gameplayState for logging
-    if self.actionTaken then return false, "already_acted" end -- Already acted this turn
+function Player:takeTurn(dx, dy, map, gameplayState)
+    local config = ServiceLocator.get("config")
+
+    if self.actionTaken then return false, "already_acted" end
 
     -- Check for stun etc. at start of turn attempt
     if self:processStatusEffectsStartTurn() then
-        -- If stunned, the turn action is consumed
-        -- but we still need to trigger end-of-turn processing later
         self.actionTaken = true
         return false, "stunned"
     end
@@ -285,69 +246,36 @@ function Player:takeTurn(dx, dy, map, gameplayState) -- Added gameplayState for 
     local newX, newY = self.x + dx, self.y + dy
     local targetEntity = map:getEntityAt(newX, newY)
 
-    if targetEntity and targetEntity ~= self then -- Is there an entity on the target tile, and it's not me?
-        -- Check if the entity is attackable (e.g., has hp and is considered an enemy)
-        -- For now, we'll assume any entity with hp > 0 that isn't the player is attackable.
-        -- A more robust system might involve factions or an `isAttackable` property.
+    if targetEntity and targetEntity ~= self then
         if targetEntity.hp and targetEntity.hp > 0 and not targetEntity.isPickup then
             -- Attack logic
-            local damage = self.baseAttackPower -- Could be modified by subroutines later
+            local damage = self.baseAttackPower
             local logMessage = targetEntity:takeDamage(damage, self.name)
-            gameplayState:logMessage(logMessage, _G.Config.activeColors.enemy) -- Log damage to enemy
-
-            if targetEntity.isDead then
-                -- Death messages/loot handled by entity's die() method or GameplayState
-            end
+            gameplayState:logMessage(logMessage, config.activeColors.enemy)
 
             self.actionTaken = true
             return true, "attack"
         else
-            -- It's a non-attackable entity (pickup, corpse, friendly that doesn't block, etc.)
-            -- OR an entity that we can't attack (e.g. already dead).
-            -- We attempt to move onto this tile. The map:isBlocked check will determine if this is possible.
-            -- map:isBlocked considers both tile walkability AND other blocking entities.
-            -- We pass 'self' to isBlocked so it doesn't consider the player itself as blocking the destination.
+            -- Non-attackable entity, attempt to move
             if not map:isBlocked(newX, newY, self) then
+                --map:moveEntity(self, newX, newY)
                 self:move(dx, dy)
                 self.actionTaken = true
-                return true, "move_onto_entity" -- Moved onto a tile that had a non-blocking entity
+                return true, "move"
             else
-                -- Cannot move onto the tile, either because the tile itself is unwalkable
-                -- or a *different* blocking entity is there (which shouldn't be the case if targetEntity was the only one)
-                -- or targetEntity itself, despite being non-attackable, is set to blocksMovement = true (e.g. a friendly NPC wall)
-                if targetEntity.blocksMovement then
-                     gameplayState:logMessage("Cannot pass through " .. targetEntity.name .. ".", _G.Config.activeColors.text)
-                else
-                     gameplayState:logMessage("Path blocked at " .. targetEntity.name .. "'s location.", _G.Config.activeColors.text)
-                end
-                return false, "blocked_by_entity_or_tile"
+                return false, "blocked"
             end
         end
-    else -- No entity on the target tile, regular move attempt
-        if not map:isBlocked(newX, newY, self) then -- Check if tile is walkable and not blocked by other entities
+    else -- No entity, try to move
+        if not map:isBlocked(newX, newY, self) then
+            --map:moveEntity(self, newX, newY)
             self:move(dx, dy)
             self.actionTaken = true
             return true, "move"
         else
-            -- It's a wall or blocked by some other means not covered by getEntityAt
-            return false, "blocked_by_wall"
+            return false, "blocked"
         end
     end
 end
-
-function Player:regenerateCPU()
-    self.cpuCycles = math.min(self.maxCPUCycles, self.cpuCycles + self.cpuRegenRate)
-end
-
--- Override die method if player needs special handling (e.g., game over)
-function Player:die()
-    Entity.die(self) -- Call base die method
-    self.char = "X" -- Player corpse looks different
-    self.color = {1,0,0,1} -- Red
-    -- Game over logic will be triggered by GameplayState checking player.isDead
-end
-
-
--- update and draw can be inherited or customized
 
 return Player

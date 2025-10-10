@@ -1,6 +1,7 @@
 -- src/core/effects/ParticleEffectsDB.lua
 local Helpers = require "src.utils.helpers" -- If needed for random choices, etc.
--- Note: We can't directly use _G.Fonts here if this file is loaded before _G.Fonts is set up.
+local config = ServiceLocator.get("config")
+local fonts = ServiceLocator.get("fonts")
 -- It's better if the functions return specs, and the ParticleSystem or GameplayState applies the actual font object.
 
 local ParticleEffectsDB = {}
@@ -27,10 +28,10 @@ function ParticleEffectsDB.spawnFloatingText(gs, text, gridX, gridY, options)
         gridY = gridY,
         text = text,
         color = options.color or {1, 1, 0.5, 1}, -- Default: Yellowish
-        font = options.font or _G.Fonts.medium,   -- Requires _G.Fonts to be loaded
+        font = options.font or fonts.medium,   -- Requires fonts to be loaded
         duration = options.duration or 0.8,
-        offsetX = options.offsetX or love.math.random(-_G.Config.spriteSize/4, _G.Config.spriteSize/4),
-        offsetY = options.offsetY or -_G.Config.spriteSize / 2,
+        offsetX = options.offsetX or love.math.random(-config.spriteSize/4, config.spriteSize/4),
+        offsetY = options.offsetY or -config.spriteSize / 2,
         vx = options.vx or 0,
         vy = options.vy or -30, -- Moves upwards
         ax = options.ax or 0,
@@ -54,11 +55,11 @@ function ParticleEffectsDB.spawnHitSparks(gs, gridX, gridY, numParticles, baseCo
     for _ = 1, numParticles do
         gs.particleSystem:addParticle({
             gridX = gridX, gridY = gridY,
-            offsetX = love.math.random(-_G.Config.spriteSize/4, _G.Config.spriteSize/4),
-            offsetY = love.math.random(-_G.Config.spriteSize/4, _G.Config.spriteSize/4),
+            offsetX = love.math.random(-config.spriteSize/4, config.spriteSize/4),
+            offsetY = love.math.random(-config.spriteSize/4, config.spriteSize/4),
             text = Helpers.choice({"*", ".", "`"}),
             color = {baseColor[1]*math.random(0.7,1), baseColor[2]*math.random(0.7,1), baseColor[3]*math.random(0.5,1), 1},
-            font = _G.Fonts.small,
+            font = fonts.small,
             duration = love.math.random(0.3, 0.6),
             vx = love.math.random(-60, 60),
             vy = love.math.random(-60, 60),
@@ -78,11 +79,11 @@ function ParticleEffectsDB.spawnDeathExplosion(gs, entity)
     for _ = 1, love.math.random(8, 15) do
         gs.particleSystem:addParticle({
             gridX = entity.x, gridY = entity.y,
-            offsetX = love.math.random(-_G.Config.spriteSize/3, _G.Config.spriteSize/3),
-            offsetY = love.math.random(-_G.Config.spriteSize/3, _G.Config.spriteSize/3),
+            offsetX = love.math.random(-config.spriteSize/3, config.spriteSize/3),
+            offsetY = love.math.random(-config.spriteSize/3, config.spriteSize/3),
             text = Helpers.choice(deathChars),
             color = {math.random(0.5,1), math.random(0.5,1), math.random(0.5,1), 1}, -- Random bright-ish color
-            font = _G.Fonts.medium,
+            font = fonts.medium,
             duration = love.math.random(0.6, 1.3),
             vx = love.math.random(-70, 70),
             vy = love.math.random(-80, 40), -- Tend to fly up more
@@ -114,7 +115,7 @@ function ParticleEffectsDB.spawnLaserBeam(gs, caster, target)
             gridX = pGridX, gridY = pGridY, -- Particle system handles conversion to pixel world coords
             text = particleChar,
             color = particleColor,
-            font = _G.Fonts.small,
+            font = fonts.small,
             duration = 0.15 + t * 0.1, -- Particles appear sequentially and last briefly
             vx = 0, vy = 0,      -- Stationary once placed
             fadeRate = 2.5       -- Fade out quickly
@@ -143,7 +144,7 @@ function ParticleEffectsDB.spawnAoEPulse(gs, centerX, centerY, radius, particleC
                         gridX = px, gridY = py,
                         text = particleChar,
                         color = Helpers.deepCopy(color),
-                        font = _G.Fonts.medium,
+                        font = fonts.medium,
                         duration = 0.3 + r * 0.1, -- Outer rings last a bit longer/appear later
                         vx = 0, vy = 0,
                         fadeRate = 1.5,

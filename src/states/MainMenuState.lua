@@ -68,8 +68,8 @@ function MainMenuState:enter(...)
     end
     
     -- Play menu music or sound (if implemented)
-    if _G.SFX then
-        _G.SFX.play("menu_ambient")
+    if ServiceLocator.get("sfx") then
+        ServiceLocator.get("sfx").play("menu_ambient")
     end
 end
 
@@ -237,9 +237,10 @@ function MainMenuState:drawSystemInfo(fonts, nativeW, nativeH)
     
     -- Get unlocked cores count from MetaProgress
     local coreCount = 1
-    if _G.MetaProgress and _G.MetaProgress.data and _G.MetaProgress.data.unlockedAICoreIds then
+    local metaProgress = ServiceLocator.tryGet("metaProgress")
+    if metaProgress and metaProgress.data and metaProgress.data.unlockedAICoreIds then
         coreCount = 0
-        for _ in pairs(_G.MetaProgress.data.unlockedAICoreIds) do
+        for _ in pairs(metaProgress.data.unlockedAICoreIds) do
             coreCount = coreCount + 1
         end
     end
@@ -251,17 +252,17 @@ end
 function MainMenuState:keypressed(key, scancode, isRepeat)
     if key == "up" then
         self.selectedOption = math.max(1, self.selectedOption - 1)
-        if _G.SFX then _G.SFX.play("ui_navigate") end
+        if ServiceLocator.get("sfx") then ServiceLocator.get("sfx").play("ui_navigate") end
         return true
         
     elseif key == "down" then
         self.selectedOption = math.min(#self.options, self.selectedOption + 1)
-        if _G.SFX then _G.SFX.play("ui_navigate") end
+        if ServiceLocator.get("sfx") then ServiceLocator.get("sfx").play("ui_navigate") end
         return true
         
     elseif key == "return" or key == "kpenter" then
         local selected = self.options[self.selectedOption]
-        if _G.SFX then _G.SFX.play("ui_select") end
+        if ServiceLocator.get("sfx") then ServiceLocator.get("sfx").play("ui_select") end
         
         self:handleMenuSelection(selected)
         return true
@@ -293,7 +294,7 @@ function MainMenuState:handleMenuSelection(selected)
     else
         -- Not yet implemented
         print(selected .. " selected (Not Yet Implemented)")
-        if _G.SFX then _G.SFX.play("ui_error") end
+        if ServiceLocator.get("sfx") then ServiceLocator.get("sfx").play("ui_error") end
         
         if self.events then
             self.events:emit("menu_option_selected", {option = selected, implemented = false})

@@ -1,6 +1,5 @@
 -- src/core/SystemCorruption.lua
 local Helpers = require "src.utils.helpers"
-local Config = _G.Config -- Assuming Config is global for access to colors, etc.
 -- ParticleFX will be passed in or accessed via GameplayState instance
 
 local SystemCorruption = {}

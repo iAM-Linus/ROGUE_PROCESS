@@ -1,6 +1,8 @@
 -- src/core/ai/AIBehaviors.lua
 local Helpers = require "src.utils.helpers"
 local ParticleFX = require "src.core.effects.ParticleEffectsDB"
+local config = ServiceLocator.get("config")
+local fonts = ServiceLocator.get("fonts")
 
 local AIBehaviors = {}
 
@@ -186,7 +188,7 @@ function AIBehaviors.planReplicate(enemy, player, map, entities, gs)
                     gs:logMessage(self.name .. " replicates! New: " .. newName, self.color)
                     if ParticleFX then ParticleFX.spawnFloatingText(gs, "++", spawnPos.x, spawnPos.y, {color=self.color, duration=0.5, vy=-10}) end
                 else
-                    gs:logMessage(self.name .. " replication failed.", _G.Config.activeColors.text)
+                    gs:logMessage(self.name .. " replication failed.", config.activeColors.text)
                 end
                 return true -- Consume turn even if failed
             end
@@ -215,12 +217,12 @@ function AIBehaviors.planPulse(enemy, player, map)
             for i = 1, self.pulseRange do
                 local targetX, targetY = self.x + dx * i, self.y + dy * i
                 if not map:isTransparent(targetX, targetY) then break end
-                if ParticleFX then ParticleFX.spawnFloatingText(gs, ".", targetX, targetY, {color={1,0.6,0,0.7}, duration=0.2, vy=0, vx=0, font=_G.Fonts.large}) end
+                if ParticleFX then ParticleFX.spawnFloatingText(gs, ".", targetX, targetY, {color={1,0.6,0,0.7}, duration=0.2, vy=0, vx=0, font=fonts.large}) end
                 local entityOnTile = map:getEntityAt(targetX, targetY)
                 if entityOnTile and not entityOnTile.isDead and not entityOnTile.isPickup then
                     if ParticleFX then ParticleFX.spawnHitSparks(gs, targetX, targetY, 3, {1.0,0.6,0.0,1}) end
                     local logMsg = entityOnTile:takeDamage(self.pulseDamage, self.name)
-                    gs:logMessage(logMsg, _G.Config.activeColors.enemy)
+                    gs:logMessage(logMsg, config.activeColors.enemy)
                     break
                 end
             end
@@ -241,7 +243,7 @@ function AIBehaviors.planRangedAttack(enemy, player, map)
                 gs:logMessage(self.name .. " fires a bit shard at " .. player.name .. "!", self.color)
                 if ParticleFX then ParticleFX.spawnLaserBeam(gs, self, player) end
                 local logMsg = player:takeDamage(self.rangedAttackDamage, self.name)
-                gs:logMessage(logMsg, _G.Config.activeColors.player)
+                gs:logMessage(logMsg, config.activeColors.player)
 
                 -- Phase Step logic is part of the execution
                 if love.math.random() < self.phaseStepChance then

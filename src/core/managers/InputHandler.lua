@@ -1,5 +1,6 @@
 -- src/core/InputHandler.lua
 local Helpers = require 'src.utils.Helpers' -- If needed for any specific input logic
+local config = ServiceLocator.get("config")
 
 local InputHandler = {}
 
@@ -146,7 +147,7 @@ function InputHandler.handlePlayerTurnMode(key, gs)
     elseif key == "n" or key == "kp3" then dx = 1; dy = 1; player_turn_handled = true
     elseif key == "." or key == "kp5" or key == "space" then
         gs.player.actionTaken = true
-        gs:logMessage(gs.player.name .. " waits.", _G.Config.activeColors.player)
+        gs:logMessage(gs.player.name .. " waits.", config.activeColors.player)
         player_turn_handled = true
     elseif key == "1" then gs:tryActivateSubroutine(1); player_turn_handled = true
     elseif key == "2" then gs:tryActivateSubroutine(2); player_turn_handled = true
@@ -167,8 +168,8 @@ function InputHandler.handlePlayerTurnMode(key, gs)
         local success, actionType = gs.player:takeTurn(dx, dy, gs.map, gs)
         if success then
             if actionType == "move" or actionType == "move_onto_entity" then
-                _G.SFX.play("player_move")
-                gs:logMessage(gs.player.name .. " moves.", _G.Config.activeColors.player)
+                ServiceLocator.get("sfx").play("player_move")
+                gs:logMessage(gs.player.name .. " moves.", config.activeColors.player)
                 gs.map:computeFov(gs.player.x, gs.player.y, gs.fovRadius)
                 gs:centerCameraOnPlayer(false)
                 local pickedUpSomething = gs:checkForPickups(gs.player.x, gs.player.y)
@@ -179,8 +180,8 @@ function InputHandler.handlePlayerTurnMode(key, gs)
                          gs:logMessage("Exit portal is currently inactive.", {1,0.5,0.5,1})
                     else
                         local wasBossFloor = (gs.objective == "defeat_boss" and gs.objectiveMet)
-                        gs:logMessage("Exit portal activated. Descending...", _G.Config.activeColors.accent)
-                        _G.SFX.play("level_exit")
+                        gs:logMessage("Exit portal activated. Descending...", config.activeColors.accent)
+                        ServiceLocator.get("sfx").play("level_exit")
                         if wasBossFloor then
                             gs:triggerBossDefeatedRewards() 
                             gs.currentSector = gs.currentSector + 1
@@ -189,7 +190,7 @@ function InputHandler.handlePlayerTurnMode(key, gs)
                         else
                             gs.player.dataFragments = gs.player.dataFragments + (10 + gs.currentSector * 5)
                             gs.player.cpuCycles = math.min(gs.player.maxCPUCycles, gs.player.cpuCycles + math.floor(gs.player.maxCPUCycles * 0.25))
-                            gs:logMessage(string.format("+%d DATA, +%d CPU", (10 + gs.currentSector * 5), math.floor(gs.player.maxCPUCycles * 0.25)), _G.Config.activeColors.pickup)
+                            gs:logMessage(string.format("+%d DATA, +%d CPU", (10 + gs.currentSector * 5), math.floor(gs.player.maxCPUCycles * 0.25)), config.activeColors.pickup)
                             if gs.currentFloorInSector >= gs.floorsPerSector then gs.isNextFloorBoss = true end
                             gs:moveToNextLevel()
                         end

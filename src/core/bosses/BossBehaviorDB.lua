@@ -2,6 +2,7 @@
 local Helpers = require "src.utils.helpers" -- Make sure this is at the top if used
 local ParticleFX = _G.ParticleFX -- Assuming ParticleFX is global (from GameplayState require)
 local SentryBot = require "src.core.enemies.SentryBot" -- Required for summon
+local config = ServiceLocator.get("config")
 
 local BossBehaviorDB = {}
 
@@ -29,7 +30,7 @@ BossBehaviorDB.Behaviors = {
                             gs:logMessage(boss.name .. " fires a probe at " .. player.name, boss.color)
                             if ParticleFX then ParticleFX.spawnLaserBeam(gs, boss, player) end
                             local logMsg = player:takeDamage(action.damage, boss.name)
-                            gs:logMessage(logMsg, _G.Config.activeColors.player)
+                            gs:logMessage(logMsg, config.activeColors.player)
                             if player.isDead then gs:logMessage(player.name .. " terminated by probe.", {1,0,0,1}) end
                             return true
                         end
@@ -57,7 +58,7 @@ BossBehaviorDB.Behaviors = {
                         execute = function(boss, player, map, entities, gs, action)
                             gs:logMessage(boss.name .. " deploys a Sentry Turret!", boss.color)
                             local success, newName = gs:requestSpawnEnemy(action.enemyClass, action.targetPos.x, action.targetPos.y, action.summonNameSuffix)
-                            if success and ParticleFX then ParticleFX.spawnFloatingText(gs, "SPAWN", action.targetPos.x, action.targetPos.y, {color=_G.Config.activeColors.enemy, duration=0.4}) end
+                            if success and ParticleFX then ParticleFX.spawnFloatingText(gs, "SPAWN", action.targetPos.x, action.targetPos.y, {color=config.activeColors.enemy, duration=0.4}) end
                             return success
                         end
                     },
@@ -114,7 +115,7 @@ BossBehaviorDB.Behaviors = {
                             gs:logMessage(boss.name .. " unleashes an OVERLOAD BEAM at " .. player.name, boss.color)
                             if ParticleFX then ParticleFX.spawnLaserBeam(gs, boss, player) end -- Could make this laser visually different
                             local logMsg = player:takeDamage(action.damage, boss.name)
-                            gs:logMessage(logMsg, _G.Config.activeColors.player)
+                            gs:logMessage(logMsg, config.activeColors.player)
                             if player.isDead then gs:logMessage(player.name .. " vaporized by overload.", {1,0,0,1}) end
                             return true
                         end
@@ -132,7 +133,7 @@ BossBehaviorDB.Behaviors = {
                                 if entity == player then -- Only target player for this AoE
                                     if Helpers.distanceEuclidean(boss, entity) <= action.radius then
                                         local logMsg = player:takeDamage(action.damage, boss.name .. " (Shockwave)")
-                                        gs:logMessage(logMsg, _G.Config.activeColors.player)
+                                        gs:logMessage(logMsg, config.activeColors.player)
                                         if player.isDead then gs:logMessage(player.name .. " caught in shockwave.", {1,0,0,1}) end
                                     end
                                 end

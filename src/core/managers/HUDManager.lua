@@ -2,6 +2,7 @@
 -- src/core/managers/HUDManager.lua - Modernized version
 local Helpers = require 'src.utils.Helpers'
 local UIHelpers = require "src.ui.ui_helpers"
+local config = ServiceLocator.get("config")
 
 local HUDManager = {}
 HUDManager.__index = HUDManager
@@ -26,9 +27,9 @@ function HUDManager:draw(player, map, turnManager, gameMessageLog,
                        currentSector, currentFloorInSector, systemCorruptionPercent)
     if not player or not map or not turnManager then return end
 
-    local nativeW, nativeH = _G.Config.nativeResolution.width, _G.Config.nativeResolution.height
-    local fontMedium = _G.Fonts.medium
-    local fontSmall = _G.Fonts.small
+    local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
+    local fontMedium = ServiceLocator.get("fonts").medium
+    local fontSmall = ServiceLocator.get("fonts").small
     local outerPadding = 8
     local panelPadding = 6
 
@@ -66,12 +67,12 @@ function HUDManager:drawTopStatusBar(player, currentSector, currentFloorInSector
     elseif healthPercent > 0.3 then healthColor = {0.8, 0.8, 0.3, 1} end
     
     love.graphics.setFont(fontSmall)
-    love.graphics.setColor(_G.Config.activeColors.text)
+    love.graphics.setColor(config.activeColors.text)
     love.graphics.print("INT", contentX, statY - 2)
     
     UIHelpers.drawProgressBar(contentX + 25, statY, 100, barHeight, healthPercent, healthColor)
     
-    love.graphics.setColor(_G.Config.activeColors.text)
+    love.graphics.setColor(config.activeColors.text)
     love.graphics.print(string.format("%d/%d", player.hp, player.maxHp), contentX + 130, statY - 2)
     
     -- CPU bar
@@ -85,7 +86,7 @@ function HUDManager:drawTopStatusBar(player, currentSector, currentFloorInSector
     
     -- Additional info on second line
     local infoY = statY + barHeight + 8
-    love.graphics.setColor(_G.Config.activeColors.accent)
+    love.graphics.setColor(config.activeColors.accent)
     love.graphics.print(string.format("DATA: %d | NODE: S%d-F%d | SYS_CORRUPT: %d%%", 
                        player.dataFragments, currentSector, currentFloorInSector, systemCorruptionPercent), 
                        contentX, infoY)
@@ -94,7 +95,7 @@ function HUDManager:drawTopStatusBar(player, currentSector, currentFloorInSector
     if player and #player.activeStatusEffects > 0 then
         local effectX = contentX + 450
         for i, effect in ipairs(player.activeStatusEffects) do
-            local effectColor = _G.Config.activeColors.highlight
+            local effectColor = config.activeColors.highlight
             local pulse = 0.7 + 0.3 * math.sin(self.statusEffectTimer * 2 + i)
             
             love.graphics.setColor(effectColor[1] * pulse, effectColor[2] * pulse, effectColor[3] * pulse, 1)
@@ -149,7 +150,7 @@ function HUDManager:drawBottomBar(gameMessageLog, nativeW, nativeH, fontSmall, o
     )
     
     love.graphics.setFont(fontSmall)
-    love.graphics.setColor(_G.Config.activeColors.ui_text_dim)
+    love.graphics.setColor(config.activeColors.ui_text_dim)
     
     local controls = {
         "↑↓←→ Move",
@@ -236,9 +237,9 @@ function HUDManager:drawMinimap(map, player, turnManager, x, y, width, height)
                 -- Exit portal
                 if mapX == map.exitPortal.x and mapY == map.exitPortal.y and map:isInFov(mapX, mapY) and map.exitPortal.active then
                     local pulse = 0.7 + 0.3 * math.sin(self.minimapPulse)
-                    love.graphics.setColor(_G.Config.activeColors.accent[1] * pulse, 
-                                          _G.Config.activeColors.accent[2] * pulse, 
-                                          _G.Config.activeColors.accent[3] * pulse, 1)
+                    love.graphics.setColor(config.activeColors.accent[1] * pulse, 
+                                          config.activeColors.accent[2] * pulse, 
+                                          config.activeColors.accent[3] * pulse, 1)
                     love.graphics.rectangle("fill", tileX, tileY, tileSize, tileSize)
                 end
             end
@@ -248,16 +249,16 @@ function HUDManager:drawMinimap(map, player, turnManager, x, y, width, height)
     -- Player (pulsing)
     if player then
         local pulse = 0.8 + 0.4 * math.sin(self.animationTime * 3)
-        love.graphics.setColor(_G.Config.activeColors.player[1] * pulse, 
-                              _G.Config.activeColors.player[2] * pulse, 
-                              _G.Config.activeColors.player[3] * pulse, 1)
+        love.graphics.setColor(config.activeColors.player[1] * pulse, 
+                              config.activeColors.player[2] * pulse, 
+                              config.activeColors.player[3] * pulse, 1)
         local playerX = offsetX + (player.x - 1) * tileSize
         local playerY = offsetY + (player.y - 1) * tileSize
         UIHelpers.drawRoundedRect(playerX, playerY, tileSize, tileSize, tileSize/3, "fill")
     end
     
     -- Enemies
-    love.graphics.setColor(_G.Config.activeColors.enemy)
+    love.graphics.setColor(config.activeColors.enemy)
     for _, entity in ipairs(turnManager:getEntities()) do
         if entity ~= player and not entity.isDead and map:isInFov(entity.x, entity.y) then
             local enemyX = offsetX + (entity.x - 1) * tileSize
@@ -267,7 +268,7 @@ function HUDManager:drawMinimap(map, player, turnManager, x, y, width, height)
     end
     
     -- Pickups
-    love.graphics.setColor(_G.Config.activeColors.pickup)
+    love.graphics.setColor(config.activeColors.pickup)
     for _, entity in ipairs(map:getAllEntities()) do
         if entity.isPickup and map:isInFov(entity.x, entity.y) then
             local pickupX = offsetX + (entity.x - 1) * tileSize
@@ -280,7 +281,7 @@ end
 function HUDManager:drawSubroutineList(player, currentMode, targetingSubroutine, x, y, width, height, font)
     love.graphics.setFont(font)
     local lineHeight = font:getHeight() + 4
-    local gameplayState = _G.Game.states:getCurrent()
+    local gameplayState = ServiceLocator.get("states"):getCurrent()
     
     for i = 1, player.maxSubroutines do
         local sub = player.subroutines[i]
@@ -294,7 +295,7 @@ function HUDManager:drawSubroutineList(player, currentMode, targetingSubroutine,
         UIHelpers.drawRoundedRect(x, slotY, width, lineHeight - 2, 3, "fill")
         
         -- Slot number
-        love.graphics.setColor(_G.Config.activeColors.accent)
+        love.graphics.setColor(config.activeColors.accent)
         love.graphics.print("[" .. i .. "]", x + 4, slotY + 2)
         
         if sub then
@@ -303,11 +304,11 @@ function HUDManager:drawSubroutineList(player, currentMode, targetingSubroutine,
             local canAfford = player.cpuCycles >= actualCost
             local isOnCooldown = sub.currentCooldown > 0
             
-            local textColor = _G.Config.activeColors.ui_text_dim
+            local textColor = config.activeColors.ui_text_dim
             local statusText = ""
             
             if currentMode == gameplayState.Mode.TARGETING and targetingSubroutine == sub then
-                textColor = _G.Config.activeColors.highlight
+                textColor = config.activeColors.highlight
                 statusText = " (TARGETING)"
             elseif isOnCooldown then
                 textColor = {0.6, 0.6, 0.6, 1}
@@ -316,7 +317,7 @@ function HUDManager:drawSubroutineList(player, currentMode, targetingSubroutine,
                 textColor = {0.8, 0.5, 0.5, 1}
                 statusText = string.format(" (CPU:%d!)", actualCost)
             else
-                textColor = _G.Config.activeColors.player
+                textColor = config.activeColors.player
                 statusText = string.format(" (%d)", actualCost)
             end
             
@@ -330,7 +331,7 @@ function HUDManager:drawSubroutineList(player, currentMode, targetingSubroutine,
                                         1 - cdPercent, {0.8, 0.4, 0.4, 0.8})
             end
         else
-            love.graphics.setColor(_G.Config.activeColors.ui_text_dim)
+            love.graphics.setColor(config.activeColors.ui_text_dim)
             love.graphics.print("---- EMPTY ----", x + 30, slotY + 2)
         end
     end
@@ -341,11 +342,11 @@ function HUDManager:drawInspectionPanel(map, currentMode, lookCursor, targetCurs
     local panelTitle = "SCAN_DATA"
     local targetX, targetY = nil, nil
     
-    if currentMode == _G.Game.states:getCurrent().Mode.LOOKING and lookCursor and lookCursor.visible then
+    if currentMode == ServiceLocator.get("states"):getCurrent().Mode.LOOKING and lookCursor and lookCursor.visible then
         entityToInspect = map:getEntityAt(lookCursor.x, lookCursor.y)
         panelTitle = entityToInspect and entityToInspect.name or string.format("TILE (%d,%d)", lookCursor.x, lookCursor.y)
         targetX, targetY = lookCursor.x, lookCursor.y
-    elseif currentMode == _G.Game.states:getCurrent().Mode.TARGETING and targetCursor and targetCursor.visible then
+    elseif currentMode == ServiceLocator.get("states"):getCurrent().Mode.TARGETING and targetCursor and targetCursor.visible then
         entityToInspect = map:getEntityAt(targetCursor.x, targetCursor.y)
         panelTitle = entityToInspect and entityToInspect.name or string.format("TARGET (%d,%d)", targetCursor.x, targetCursor.y)
         targetX, targetY = targetCursor.x, targetCursor.y
@@ -360,7 +361,7 @@ function HUDManager:drawInspectionPanel(map, currentMode, lookCursor, targetCurs
     local currentLine = 0
     
     if entityToInspect and entityToInspect.hp then
-        love.graphics.setColor(_G.Config.activeColors.text)
+        love.graphics.setColor(config.activeColors.text)
         love.graphics.print("HP: " .. entityToInspect.hp .. "/" .. entityToInspect.maxHp, 
                            contentX, contentY + currentLine * lineHeight)
         currentLine = currentLine + 1
@@ -374,13 +375,13 @@ function HUDManager:drawInspectionPanel(map, currentMode, lookCursor, targetCurs
         
         -- Status effects
         if #entityToInspect.activeStatusEffects > 0 then
-            love.graphics.setColor(_G.Config.activeColors.accent)
+            love.graphics.setColor(config.activeColors.accent)
             love.graphics.print("Effects:", contentX, contentY + currentLine * lineHeight)
             currentLine = currentLine + 1
             
             for _, effect in ipairs(entityToInspect.activeStatusEffects) do
                 local effectText = (effect.name or effect.id or "Unknown") .. (effect.duration and " (" .. tostring(effect.duration) .. ")" or "")
-                love.graphics.setColor(_G.Config.activeColors.ui_text_default)
+                love.graphics.setColor(config.activeColors.ui_text_default)
                 love.graphics.print("• " .. effectText, contentX + 8, contentY + currentLine * lineHeight)
                 currentLine = currentLine + 1
             end
@@ -388,7 +389,7 @@ function HUDManager:drawInspectionPanel(map, currentMode, lookCursor, targetCurs
     else
         -- Tile info
         local tile = map:getTile(targetX, targetY)
-        love.graphics.setColor(_G.Config.activeColors.text)
+        love.graphics.setColor(config.activeColors.text)
         love.graphics.print("Terrain: " .. (tile.walkable and "Floor" or "Wall"), 
                            contentX, contentY + currentLine * lineHeight)
         currentLine = currentLine + 1

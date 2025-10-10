@@ -25,13 +25,16 @@ CoreModificationDB.Modifications = {
         description = "Increases Maximum INTEGRITY by 20.",
         cost = 50,
         maxLevel = 1,
-        applyEffect = function(player, level, gsInstance) -- gsInstance is the GameplayState instance
+        applyEffect = function(player, level, events)
             player.maxHp = player.maxHp + 20
             player.hp = player.hp + 20
-            if gsInstance and gsInstance.logMessage then
-                gsInstance:logMessage("Core Shell Reinforced: Max INTEGRITY +20", _G.Config.activeColors.pickup)
-            else
-                print("Error in CoreModDB: gsInstance or logMessage not available for max_integrity_boost_1")
+        
+            -- Emit event for logging
+            if events then
+                events:emit("log_message", {
+                    text = "Core Shell Reinforced: INTEGRITY.max += 20.",
+                    color = {0.4, 1, 0.5, 1}
+                })
             end
         end,
         tags = {"integrity", "survivability"}
@@ -43,14 +46,15 @@ CoreModificationDB.Modifications = {
         cost = 100,
         maxLevel = 1,
         prerequisites = {"max_integrity_boost_1"},
-        applyEffect = function(player, level, gsInstance)
+        applyEffect = function(player, level, events)
             player.maxHp = player.maxHp + 30
             player.hp = player.hp + 30
-            if gsInstance and gsInstance.logMessage then
-                -- The log message here was for cpu_regen_boost_1, corrected it:
-                gsInstance:logMessage("Integrity Matrix Optimized: Max INTEGRITY +30", _G.Config.activeColors.pickup)
-            else
-                print("Error in CoreModDB: gsInstance or logMessage not available for max_integrity_boost_2")
+            
+            if events then
+                events:emit("log_message", {
+                    text = "ECC Modules Active: Stun Resistance increased.",
+                    color = {0.4, 1, 0.5, 1}
+                })
             end
         end,
         tags = {"integrity", "survivability"}
@@ -61,12 +65,14 @@ CoreModificationDB.Modifications = {
         description = "Increases CPU_CYCLE regeneration per turn by 1.",
         cost = 75,
         maxLevel = 1,
-        applyEffect = function(player, level, gsInstance)
+        applyEffect = function(player, level, events)
             player.cpuRegenRate = player.cpuRegenRate + 1
-            if gsInstance and gsInstance.logMessage then
-                gsInstance:logMessage("Auxiliary Capacitor Online: CPU Regen +1/turn", _G.Config.activeColors.pickup)
-            else
-                print("Error in CoreModDB: gsInstance or logMessage not available for cpu_regen_boost_1")
+            
+            if events then
+                events:emit("log_message", {
+                    text = "Capacitor charged: Regen increased by +1.0.",
+                    color = {0.4, 1, 0.5, 1}
+                })
             end
         end,
         tags = {"cpu", "resource"}
@@ -77,13 +83,15 @@ CoreModificationDB.Modifications = {
         description = "Increases Maximum CPU_CYCLES by 25.",
         cost = 60,
         maxLevel = 1,
-        applyEffect = function(player, level, gsInstance)
+        applyEffect = function(player, level, events)
             player.maxCPUCycles = player.maxCPUCycles + 25
             player.cpuCycles = player.cpuCycles + 25 
-            if gsInstance and gsInstance.logMessage then
-                gsInstance:logMessage("CPU Cache Expanded: Max CPU +25", _G.Config.activeColors.pickup)
-            else
-                print("Error in CoreModDB: gsInstance or logMessage not available for max_cpu_boost_1")
+            
+            if events then
+                events:emit("log_message", {
+                    text = "Cache optimized: CPU_CYCLES.max_value += 25.",
+                    color = {0.4, 1, 0.5, 1}
+                })
             end
         end,
         tags = {"cpu", "resource"}
@@ -94,12 +102,14 @@ CoreModificationDB.Modifications = {
         description = "Reduces CPU cost of all subroutines by 10% (min 1).",
         cost = 120,
         maxLevel = 1,
-        applyEffect = function(player, level, gsInstance)
+        applyEffect = function(player, level, events)
             player:addCoreModificationFlag(CoreModificationDB.Modifications.data_compression_1.id)
-            if gsInstance and gsInstance.logMessage then
-                gsInstance:logMessage("Subroutine Optimizer Installed: Costs reduced.", _G.Config.activeColors.pickup)
-            else
-                print("Error in CoreModDB: gsInstance or logMessage not available for data_compression_1")
+            
+            if events then
+                events:emit("log_message", {
+                    text = "Mk1 Optimizer: CPU Cost -= (cost*.9).",
+                    color = {0.4, 1, 0.5, 1}
+                })
             end
         end,
         getEffectValue = function(player, level) return 0.10 end,
@@ -111,12 +121,14 @@ CoreModificationDB.Modifications = {
         description = "Grants a 25% chance to resist STUN effects.",
         cost = 90,
         maxLevel = 1,
-        applyEffect = function(player, level, gsInstance)
+        applyEffect = function(player, level, events)
             player:addCoreModificationFlag(CoreModificationDB.Modifications.error_correction_1.id)
-            if gsInstance and gsInstance.logMessage then
-                gsInstance:logMessage("ECC Modules Active: Stun Resistance increased.", _G.Config.activeColors.pickup)
-            else
-                print("Error in CoreModDB: gsInstance or logMessage not available for error_correction_1")
+            
+            if events then
+                events:emit("log_message", {
+                    text = "ECC Modules Active: Stun Resistance increased.",
+                    color = {0.4, 1, 0.5, 1}
+                })
             end
         end,
         getEffectValue = function(player, level) return 0.25 end,

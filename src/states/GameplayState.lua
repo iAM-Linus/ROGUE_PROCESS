@@ -13,6 +13,9 @@ local UIHelpers = require 'src.ui.ui_helpers'
 local Pickup = require 'src.core.Pickup'
 local GlitchSwarmer = require 'src.core.enemies.GlitchSwarmer'
 
+local config = ServiceLocator.get("config")
+local fonts = ServiceLocator.get("fonts")
+
 local GameplayState = {}
 GameplayState.__index = GameplayState
 setmetatable(GameplayState, { __index = BaseState })
@@ -261,7 +264,7 @@ function GameplayState:resume()
     if self.pendingBossReward_SubroutineChoice then
         print("Resuming after boss reward subroutine choice. Moving to next level.")
         self.pendingBossReward_SubroutineChoice = false
-        _G.SFX.play("level_exit")
+        ServiceLocator.get("sfx").play("level_exit")
         self:moveToNextLevel() 
     elseif self.player then
         -- Check if player took action while in overlay state
@@ -497,7 +500,7 @@ function GameplayState:checkForPickups(x, y)
     if entityOnTile and entityOnTile.isPickup and entityOnTile ~= self.player then                 -- Redundant check for entityOnTile.isPickup if loop worked
         print("Processing pickup: " .. entityOnTile.name .. ", type: " .. entityOnTile.pickupType) -- DEBUG
         if entityOnTile.pickupType == "SUBROUTINE_CACHE" then
-            _G.SFX.play("pickup_subroutine_cache")
+            ServiceLocator.get("sfx").play("pickup_subroutine_cache")
             self:logMessage("Found a SUBROUTINE_CACHE!", config.activeColors.pickup)
             self.map:removeEntity(entityOnTile)
             self.pausedForChoice = true
@@ -506,7 +509,7 @@ function GameplayState:checkForPickups(x, y)
         elseif entityOnTile.pickupType == "DATA_FRAGMENT" then
             local value = entityOnTile.data.value or 10
             self.player.dataFragments = self.player.dataFragments + value
-            _G.SFX.play("pickup_data_fragment")
+            ServiceLocator.get("sfx").play("pickup_data_fragment")
             self:logMessage(string.format("Collected DATA_FRAGMENT (%d). Total: %d", value, self.player.dataFragments),
                 config.activeColors.pickup)
             self.map:removeEntity(entityOnTile)
@@ -514,7 +517,7 @@ function GameplayState:checkForPickups(x, y)
         elseif entityOnTile.pickupType == "REPAIR_NANITES" then
             local healAmount = entityOnTile.data.value
             self.player.hp = math.min(self.player.maxHp, self.player.hp + healAmount)
-            _G.SFX.play("pickup_health")
+            ServiceLocator.get("sfx").play("pickup_health")
             self:logMessage(string.format("Repaired %d INTEGRITY by Nanites.", healAmount), config.activeColors.player)
             self.map:removeEntity(entityOnTile)
             if ParticleFX then
@@ -525,7 +528,7 @@ function GameplayState:checkForPickups(x, y)
         elseif entityOnTile.pickupType == "ENERGY_CELL" then
             local cpuAmount = entityOnTile.data.value
             self.player.cpuCycles = math.min(self.player.maxCPUCycles, self.player.cpuCycles + cpuAmount)
-            _G.SFX.play("pickup_cpu")
+            ServiceLocator.get("sfx").play("pickup_cpu")
             self:logMessage(string.format("Restored %d CPU_CYCLES from Energy Cell.", cpuAmount),
                 config.activeColors.player)
             self.map:removeEntity(entityOnTile)
@@ -1497,7 +1500,7 @@ function GameplayState:leave()
 end
 
 function GameplayState:calculateGameViewport()
-    local screenW, screenH = Config.nativeResolution.width, Config.nativeResolution.height
+    local screenW, screenH = config.nativeResolution.width, config.nativeResolution.height
 
     if screenW == 0 or screenH == 0 then
         print("[CALC_VIEWPORT] Warning: Native resolution dimensions are zero. Aborting calculation.")

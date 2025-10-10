@@ -1,5 +1,5 @@
 -- src/core/AICoreDB.lua
---local _G.Config = _G.Config -- For default player stats if needed
+local config = ServiceLocator.get("config") -- For default player stats if needed
 
 local AICoreDB = {}
 
@@ -40,12 +40,12 @@ AICoreDB.Cores = {
         name = "Assist Core 0",
         quadName = "PLAYER_DEFAULT",
         description = "A balanced, adaptable processing unit. Standard configuration.",
-        char = _G.Config.playerChar or "@",
-        color = _G.Config.activeColors.player,
+        char = config.playerChar or "@",
+        color = config.activeColors.player,
         baseStats = {
-            hp = _G.Config.playerIntegrity or 100,
-            cpu = _G.Config.playerCPUCycles or 50,
-            cpuRegen = _G.Config.playerCPURegen or 1,
+            hp = config.playerIntegrity or 100,
+            cpu = config.playerCPUCycles or 50,
+            cpuRegen = config.playerCPURegen or 1,
             attack = 10 -- Assuming a base attack power
         },
         startingSubroutineId = nil, -- Starts with no subroutine, relies on first cache

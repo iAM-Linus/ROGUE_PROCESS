@@ -1,5 +1,8 @@
 -- src/core/Entity.lua
 local CoreModificationDB = require 'src.core.CoreModificationDB'
+local config = ServiceLocator.get("config")
+local fonts = ServiceLocator.get("fonts")
+
 local Entity = {}
 Entity.__index = Entity
 
@@ -9,8 +12,6 @@ function Entity:new(x, y, char_or_quadName, color_or_nil, name, blocksMovementOv
     instance.y = y
     instance.quadName = char_or_quadName -- Now this will store the quad name
     instance.spriteColor = color_or_nil or {1,1,1,1} -- Store a tint color, default to white
-    --instance.char = char
-    --instance.color = color or _G.Config.activeColors.default
     instance.name = name or "ENTITY"
     
     if blocksMovementOverride ~= nil then
@@ -52,13 +53,13 @@ function Entity:updateAnimation(dt)
         self.deathAnimationProgress = 0
         
         -- Add death animation to global animation manager if available
-        local gs = _G.Game.states:getCurrent()
+        local gs = ServiceLocator.get("states"):getCurrent()
         if gs and gs.animationManager then
             gs.animationManager:addFlashEffect({1, 0.3, 0.3, 0.8}, 0.6, 0.3)
             gs.animationManager:addPulseEffect(
-                self.animX * _G.Config.spriteSize + _G.Config.spriteSize/2,
-                self.animY * _G.Config.spriteSize + _G.Config.spriteSize/2,
-                _G.Config.spriteSize * 2,
+                self.animX * config.spriteSize + config.spriteSize/2,
+                self.animY * config.spriteSize + config.spriteSize/2,
+                config.spriteSize * 2,
                 {1, 0.5, 0.5, 1},
                 0.8
             )
@@ -102,13 +103,13 @@ function Entity:move(dx, dy)
     self.targetY = self.y
     
     -- Add movement trail effect
-    local gs = _G.Game.states:getCurrent()
+    local gs = ServiceLocator.get("states"):getCurrent()
     if gs and gs.animationManager and not self.isDead then
         gs.animationManager:addParticleTrail(
-            self.animX * _G.Config.spriteSize + _G.Config.spriteSize/2,
-            self.animY * _G.Config.spriteSize + _G.Config.spriteSize/2,
-            self.targetX * _G.Config.spriteSize + _G.Config.spriteSize/2,
-            self.targetY * _G.Config.spriteSize + _G.Config.spriteSize/2,
+            self.animX * config.spriteSize + config.spriteSize/2,
+            self.animY * config.spriteSize + config.spriteSize/2,
+            self.targetX * config.spriteSize + config.spriteSize/2,
+            self.targetY * config.spriteSize + config.spriteSize/2,
             3, self.spriteColor, 0.3
         )
     end
@@ -150,7 +151,7 @@ function Entity:draw(tileScreenX, tileScreenY, visualSize)
 end
 
 function Entity:drawSprite(x, y, visualSize, isGlow)
-    local quadData = SpriteManager.getQuadData(self.quadName)
+    local quadData = ServiceLocator.get("sprites").getQuadData(self.quadName)
     if quadData and quadData.quad and quadData.image and quadData.spriteWidth and quadData.spriteHeight then
         local color = self.spriteColor or {1,1,1,1}
         if isGlow then
@@ -164,7 +165,7 @@ function Entity:drawSprite(x, y, visualSize, isGlow)
                            visualSize / quadData.spriteHeight)
     else
         -- Fallback character drawing with animation
-        love.graphics.setFont(_G.Fonts.medium)
+        love.graphics.setFont(fonts.medium)
         if isGlow then
             love.graphics.setColor(self.spriteColor[1], self.spriteColor[2], self.spriteColor[3], 0.3)
         else
@@ -177,8 +178,8 @@ function Entity:drawSprite(x, y, visualSize, isGlow)
         end
         
         love.graphics.print(char,
-                            math.floor(x + visualSize / 2 - (_G.Fonts.medium:getWidth(char) / 2)),
-                            math.floor(y + visualSize / 2 - (_G.Fonts.medium:getHeight() / 2)))
+                            math.floor(x + visualSize / 2 - (fonts.medium:getWidth(char) / 2)),
+                            math.floor(y + visualSize / 2 - (fonts.medium:getHeight() / 2)))
     end
 end
 
@@ -204,7 +205,7 @@ function Entity:drawStatusEffects(x, y, visualSize)
         end
         
         love.graphics.setColor(effectColor)
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
         local iconChar = effect.id == "shield" and "◈" or 
                         effect.id == "stun" and "✦" or 
                         effect.id == "corrupt_dot" and "◐" or "●"
@@ -256,10 +257,13 @@ function Entity:drawHealthBar(x, y, visualSize)
 end
 
 function Entity:takeDamage(amount, attackerName)
-    local actualAmount = amount
+    local config = ServiceLocator.get("config")
+    local stateManager = ServiceLocator.get("states")
+    
+    -- Shield logic (if applicable, mainly for Player)
     local shieldEffectInstance = nil
+    local actualAmount = amount
 
-    -- Check for active shield status effect
     for _, effect in ipairs(self.activeStatusEffects) do
         if effect.id == "shield" and effect.data and effect.data.amount > 0 then
             shieldEffectInstance = effect
@@ -272,19 +276,20 @@ function Entity:takeDamage(amount, attackerName)
         shieldEffectInstance.data.amount = shieldEffectInstance.data.amount - absorbed
         actualAmount = actualAmount - absorbed
         
-        local gameplayState = _G.Game.states:getCurrent()
+        local message = string.format("%s's shield absorbs %d damage! (%d remaining)", 
+            self.name, absorbed, shieldEffectInstance.data.amount)
+        
+        local gameplayState = stateManager:getCurrent()
         if gameplayState and gameplayState.logMessage then
-            local shieldMsg = string.format("%s's %s absorbs %d damage! (Shield: %d left)", self.name, shieldEffectInstance.name or "Shield", absorbed, shieldEffectInstance.data.amount)
-            gameplayState:logMessage(shieldMsg, Config.activeColors.accent)
-            if shieldEffectInstance.data.amount <= 0 then
-                 gameplayState:logMessage(self.name .. "'s " .. (shieldEffectInstance.name or "Shield") .. " depleted!", Config.activeColors.accent)
-            end
+            gameplayState:logMessage(message, config.activeColors.accent)
+        end
+        
+        if shieldEffectInstance.data.amount <= 0 and gameplayState and gameplayState.logMessage then
+            gameplayState:logMessage(shieldEffectInstance.name .. " depleted!", config.activeColors.accent)
         end
     end
 
-    if actualAmount <= 0 and shieldEffectInstance then -- All damage absorbed by shield
-        return string.format("%s's attack fully absorbed by %s's %s.", attackerName or "Attack", self.name, shieldEffectInstance.name or "Shield")
-    elseif actualAmount <=0 then -- No damage to apply, but no shield involved
+    if actualAmount <= 0 then
         return string.format("%s's attack dealt no damage to %s.", attackerName or "Attack", self.name)
     end
 
@@ -292,54 +297,35 @@ function Entity:takeDamage(amount, attackerName)
     self.hp = self.hp - actualAmount
     local message = string.format("%s takes %d damage from %s.", self.name, actualAmount, attackerName or "UNKNOWN_SOURCE")
 
-    local gameplayState = _G.Game.states:getCurrent()
+    local gameplayState = stateManager:getCurrent()
     if gameplayState and gameplayState.triggerScreenShake then
-        local shakeIntensity = 3 -- Default shake for generic enemy damage
-        if amount > self.maxHp * 0.25 then -- If damage is significant (e.g., >25% of max HP)
+        local shakeIntensity = 3
+        if amount > self.maxHp * 0.25 then
             shakeIntensity = 6
         end
         gameplayState:triggerScreenShake(shakeIntensity)
     end
 
     if actualAmount > 0 then
-        if self == _G.Game.states:getCurrent().player then -- If player is hit
-            _G.SFX.play("enemy_attack_hit") -- Or a specific "player_hurt" sound
-        else -- An enemy is hit
-            _G.SFX.play("player_attack_hit")
+        local sfx = ServiceLocator.get("sfx")
+        if gameplayState and self == gameplayState.player then
+            sfx.play("enemy_attack_hit")
+        else
+            sfx.play("player_attack_hit")
         end
     end
 
     -- Add visual feedback
     self.flashTimer = 0.3
     self.lastDamageTime = love.timer.getTime()
-    
-    local gs = _G.Game.states:getCurrent()
-    if gs and gs.animationManager then
-        -- Screen shake for significant damage
-        if amount > self.maxHp * 0.2 then
-            gs.animationManager:addScreenShake(5, 0.2)
-        end
-        
-        -- Floating damage text
-        gs.animationManager:addFloatingText(
-            "-" .. amount,
-            self.animX * _G.Config.spriteSize + _G.Config.spriteSize/2,
-            self.animY * _G.Config.spriteSize,
-            {1, 0.3, 0.3, 1},
-            _G.Fonts.medium,
-            {vy = -60, duration = 1.2}
-        )
-        
-        -- Impact flash
-        gs.animationManager:addFlashEffect({1, 0.8, 0.8, 0.4}, 0.8, 0.15)
-    end
 
     if self.hp <= 0 then
         self.hp = 0
         self:die()
         message = message .. " " .. self.name .. " is destroyed!"
     end
-    return message -- Return message for logging
+    
+    return message
 end
 
 function Entity:hasStatusEffect(effectId)
@@ -352,19 +338,24 @@ function Entity:hasStatusEffect(effectId)
 end
 
 function Entity:addStatusEffect(effectData)
+    local config = ServiceLocator.get("config")
+    local stateManager = ServiceLocator.get("states")
+    local gameplayState = stateManager:getCurrent()
+
     -- Check for stun resistance if this is the player and the effect is stun
-    if self == _G.Game.states:getCurrent().player and effectData.id == "stun" then -- Assuming player is accessible
+    if gameplayState and self == gameplayState.player and effectData.id == "stun" then -- Assuming player is accessible
         if self:hasCoreModificationFlag("error_correction_1") then
             local modDef = CoreModificationDB.getById("error_correction_1")
             if modDef and modDef.getEffectValue then
                 local resistChance = modDef.getEffectValue(self, self:getCoreModificationLevel("error_correction_1"))
                 if love.math.random() < resistChance then
-                    _G.Game.states:getCurrent():logMessage(self.name .. " resisted " .. (effectData.name or "Stun") .. " due to ECC Memory!", Config.activeColors.pickup)
+                    gameplayState:logMessage(self.name .. " resisted " .. (effectData.name or "Stun") .. " due to ECC Memory!", config.activeColors.pickup)
                     return -- Effect resisted
                 end
             end
         end
     end
+
     -- effectData should be a table like: {id="stun", name="Stunned", duration=2, data={...}}
     local existingEffect = nil
     for i, effect in ipairs(self.activeStatusEffects) do
@@ -390,7 +381,8 @@ end
 
 function Entity:processStatusEffectsStartTurn()
     if self:hasStatusEffect("stun") then
-        _G.Game.states:getCurrent():logMessage(self.name .. " is stunned and cannot act!", {1, 1, 0.5, 1})
+        local stateManager = ServiceLocator.get("states")
+        stateManager:getCurrent():logMessage(self.name .. " is stunned and cannot act!", {1, 1, 0.5, 1})
         return true
     end
     -- Add checks for other action-preventing effects here (e.g., frozen)
@@ -398,6 +390,7 @@ function Entity:processStatusEffectsStartTurn()
 end
 
 function Entity:processStatusEffectsEndTurn(gameplayState)
+    local config = ServiceLocator.get("config")
     local effectsToRemove = {}
 
     for i, effect in ipairs(self.activeStatusEffects) do
@@ -405,7 +398,7 @@ function Entity:processStatusEffectsEndTurn(gameplayState)
         if effect.id == "corrupt_dot" and effect.data and effect.data.damage then
             local dmg = effect.data.damage
             local logMsg = self:takeDamage(dmg, effect.name or "Corruption")
-            gameplayState:logMessage(logMsg, Config.activeColors.enemy)
+            gameplayState:logMessage(logMsg, config.activeColors.enemy)
         end
         -- Add other end-of-turn effects here
 
@@ -413,7 +406,7 @@ function Entity:processStatusEffectsEndTurn(gameplayState)
         effect.duration = effect.duration - 1
         if effect.duration <= 0 then
             table.insert(effectsToRemove, i) -- Mark for removal
-            gameplayState:logMessage(self.name .. " 's " .. effect.name .. " effect wore off.", Config.activeColors.text)
+            gameplayState:logMessage(self.name .. " 's " .. effect.name .. " effect wore off.", config.activeColors.text)
         end
     end
 
@@ -431,26 +424,25 @@ function Entity:die()
     self.blocksMovement = false -- Corpses don't block movement
     self.name = "Destroyed " .. self.name
     self.activeStatusEffects = {} -- Clear status effects on death
-    -- Further death logic (e.g., drop loot) can be added here or in subclasses
 
     -- Spawn Death Particles
-    local gameplayState = _G.Game.states:getCurrent()
+    local stateManager = ServiceLocator.get("states")
+    local config = ServiceLocator.get("config")
+    local gameplayState = stateManager:getCurrent()
 
     if gameplayState and gameplayState.objective == "defeat_boss" and self == gameplayState.currentBossEntity then
-        gameplayState:logMessage(self.name .. " DEFEATED! Exit portal activated.", Config.activeColors.pickup)
+        gameplayState:logMessage(self.name .. " DEFEATED! Exit portal activated.", config.activeColors.pickup)
         gameplayState.objectiveMet = true
         if gameplayState.map.exitPortal then
             gameplayState.map.exitPortal.active = true
-            gameplayState.map.exitPortal.char = "X" -- Change back to active char
-            -- Optional: Spawn exit portal if it wasn't there
-            -- if not (gameplayState.map.exitPortal.x > 0) then ... place it ... end
+            gameplayState.map.exitPortal.char = "X"
         end
-        -- Trigger boss reward sequence (will be handled when player exits)
     end
 
-    _G.SFX.play("enemy_die")
+    local sfx = ServiceLocator.get("sfx")
+    sfx.play("enemy_die")
 
-    if gameplayState and gameplayState.systemCorruption then -- Check for the module
+    if gameplayState and gameplayState.systemCorruption then
         if self.isEnemy then 
             gameplayState.systemCorruption:add(gameplayState.systemCorruption.corruptionPerKill or 1)
         end

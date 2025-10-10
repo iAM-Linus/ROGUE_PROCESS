@@ -1,5 +1,6 @@
 -- src/ui/ui_helpers.lua - Fixed version with ASCII-safe characters
-local Config = _G.Config
+local config = ServiceLocator.get("config")
+local fonts = ServiceLocator.get("fonts")
 
 local UIHelpers = {}
 
@@ -14,30 +15,30 @@ function UIHelpers.drawPanel(x, y, width, height, title, style)
         h = "-", v = "|", titleLeft = "+", titleMid = "-", titleRight = "+"
     }
 
-    local font = _G.Fonts.small
-    local titleFont = _G.Fonts.medium
+    local font = fonts.small
+    local titleFont = fonts.medium
     local charW = font:getWidth(borderChars.h)
     local charH = font:getHeight()
     local titleTextHeight = titleFont:getHeight()
 
     -- Style-based colors with animation
-    local borderColor = Config.activeColors.ui_panel_border
-    local titleColor = Config.activeColors.ui_panel_title
+    local borderColor = config.activeColors.ui_panel_border
+    local titleColor = config.activeColors.ui_panel_title
     local bgColor = nil
     local glowIntensity = 0
     
     if style == "highlighted" then
         local pulse = 0.7 + 0.3 * math.sin(time * 3)
-        borderColor = {Config.activeColors.highlight[1] * pulse, 
-                      Config.activeColors.highlight[2] * pulse, 
-                      Config.activeColors.highlight[3] * pulse, 1}
+        borderColor = {config.activeColors.highlight[1] * pulse, 
+                      config.activeColors.highlight[2] * pulse, 
+                      config.activeColors.highlight[3] * pulse, 1}
         titleColor = borderColor
         glowIntensity = pulse * 0.3
     elseif style == "compact" then
-        borderColor = {Config.activeColors.ui_panel_border[1] * 0.7, 
-                      Config.activeColors.ui_panel_border[2] * 0.7, 
-                      Config.activeColors.ui_panel_border[3] * 0.7, 
-                      Config.activeColors.ui_panel_border[4] or 1}
+        borderColor = {config.activeColors.ui_panel_border[1] * 0.7, 
+                      config.activeColors.ui_panel_border[2] * 0.7, 
+                      config.activeColors.ui_panel_border[3] * 0.7, 
+                      config.activeColors.ui_panel_border[4] or 1}
     elseif style == "warning" then
         local flash = 0.8 + 0.4 * math.sin(time * 6)
         borderColor = {1, 0.5, 0.2, flash}
@@ -180,20 +181,20 @@ end
 function UIHelpers.drawButton(x, y, width, height, text, isSelected, isPressed, animationTime)
     animationTime = animationTime or love.timer.getTime()
     
-    local buttonColor = Config.activeColors.ui_panel_border
-    local textColor = Config.activeColors.ui_text_default
+    local buttonColor = config.activeColors.ui_panel_border
+    local textColor = config.activeColors.ui_text_default
     local bgColor = nil
     local glowIntensity = 0
     
     if isSelected then
         local pulse = 0.7 + 0.3 * math.sin(animationTime * 4)
-        buttonColor = {Config.activeColors.highlight[1] * pulse, 
-                      Config.activeColors.highlight[2] * pulse, 
-                      Config.activeColors.highlight[3] * pulse, 1}
-        textColor = Config.activeColors.highlight
-        bgColor = {Config.activeColors.highlight[1] * 0.1, 
-                  Config.activeColors.highlight[2] * 0.1, 
-                  Config.activeColors.highlight[3] * 0.1, 0.3}
+        buttonColor = {config.activeColors.highlight[1] * pulse, 
+                      config.activeColors.highlight[2] * pulse, 
+                      config.activeColors.highlight[3] * pulse, 1}
+        textColor = config.activeColors.highlight
+        bgColor = {config.activeColors.highlight[1] * 0.1, 
+                  config.activeColors.highlight[2] * 0.1, 
+                  config.activeColors.highlight[3] * 0.1, 0.3}
         glowIntensity = pulse * 0.4
         
         -- Particle effects around selected button
@@ -209,9 +210,9 @@ function UIHelpers.drawButton(x, y, width, height, text, isSelected, isPressed, 
     end
     
     if isPressed then
-        bgColor = {Config.activeColors.highlight[1] * 0.3, 
-                  Config.activeColors.highlight[2] * 0.3, 
-                  Config.activeColors.highlight[3] * 0.3, 0.5}
+        bgColor = {config.activeColors.highlight[1] * 0.3, 
+                  config.activeColors.highlight[2] * 0.3, 
+                  config.activeColors.highlight[3] * 0.3, 0.5}
         glowIntensity = 0.6
     end
     
@@ -241,11 +242,11 @@ function UIHelpers.drawButton(x, y, width, height, text, isSelected, isPressed, 
     end
     
     -- Text with subtle animation
-    love.graphics.setFont(_G.Fonts.medium)
+    love.graphics.setFont(fonts.medium)
     local textPulse = isSelected and (0.9 + 0.1 * math.sin(animationTime * 8)) or 1
     love.graphics.setColor(textColor[1] * textPulse, textColor[2] * textPulse, textColor[3] * textPulse, textColor[4] or 1)
-    local textX = x + width/2 - _G.Fonts.medium:getWidth(text)/2
-    local textY = y + height/2 - _G.Fonts.medium:getHeight()/2
+    local textX = x + width/2 - fonts.medium:getWidth(text)/2
+    local textY = y + height/2 - fonts.medium:getHeight()/2
     love.graphics.print(text, textX, textY)
 end
 
@@ -253,7 +254,7 @@ end
 function UIHelpers.drawProgressBar(x, y, width, height, percentage, color, backgroundColor)
     percentage = math.max(0, math.min(1, percentage))
     backgroundColor = backgroundColor or {0.2, 0.2, 0.2, 0.8}
-    color = color or Config.activeColors.highlight
+    color = color or config.activeColors.highlight
     local time = love.timer.getTime()
     
     -- Background with subtle pulse
@@ -287,7 +288,7 @@ function UIHelpers.drawProgressBar(x, y, width, height, percentage, color, backg
     end
     
     -- Border with glow for critical values
-    local borderColor = Config.activeColors.ui_panel_border
+    local borderColor = config.activeColors.ui_panel_border
     if percentage < 0.25 then
         local criticalFlash = 0.8 + 0.4 * math.sin(time * 8)
         borderColor = {1, 0.3, 0.3, criticalFlash}
@@ -337,7 +338,7 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
     animationTime = animationTime or love.timer.getTime()
 
     -- Background panel for the list
-    love.graphics.setColor(Config.activeColors.background[1], Config.activeColors.background[2], Config.activeColors.background[3], 0.3)
+    love.graphics.setColor(config.activeColors.background[1], config.activeColors.background[2], config.activeColors.background[3], 0.3)
     UIHelpers.drawRoundedRect(x - 8, y - 4, width + 16, maxVisibleItems * itemHeight + 8, 6, "fill")
 
     for i = 1, maxVisibleItems do
@@ -356,7 +357,7 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
             local slideOffset = math.sin(animationTime * 4) * 2
             
             -- Multi-layer selection background
-            local highlightColor = Config.activeColors.highlight
+            local highlightColor = config.activeColors.highlight
             
             -- Outer glow
             love.graphics.setColor(highlightColor[1], highlightColor[2], highlightColor[3], 0.2 * pulse)
@@ -372,8 +373,8 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
             
             -- Animated selection indicator (simple arrow using ASCII)
             love.graphics.setColor(highlightColor)
-            love.graphics.setFont(_G.Fonts.small)
-            love.graphics.print(">", x - 15, currentY + itemHeight/2 - _G.Fonts.small:getHeight()/2)
+            love.graphics.setFont(fonts.small)
+            love.graphics.print(">", x - 15, currentY + itemHeight/2 - fonts.small:getHeight()/2)
             
             -- Particle effects for selected item
             for j = 1, 2 do
@@ -383,21 +384,21 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
                 love.graphics.circle("fill", particleX, particleY, 1)
             end
             
-            love.graphics.setColor(Config.activeColors.text)
+            love.graphics.setColor(config.activeColors.text)
             displayText = ">> " .. displayText
         elseif item.disabled then
             love.graphics.setColor(0.5, 0.5, 0.5, 1)
         else
             -- Subtle hover effect for non-selected items
             local hoverAlpha = 0.05 + 0.02 * math.sin(animationTime + itemActualIndex)
-            love.graphics.setColor(Config.activeColors.text[1], Config.activeColors.text[2], Config.activeColors.text[3], hoverAlpha)
+            love.graphics.setColor(config.activeColors.text[1], config.activeColors.text[2], config.activeColors.text[3], hoverAlpha)
             UIHelpers.drawRoundedRect(x - 4, currentY - 1, width + 8, itemHeight - 2, 2, "fill")
             
-            love.graphics.setColor(Config.activeColors.text)
+            love.graphics.setColor(config.activeColors.text)
         end
         
         -- Multi-line text support with better formatting
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
         
         -- Text shadow for better readability
         if isSelected then
@@ -407,11 +408,11 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
         
         -- Main text
         if isSelected then
-            love.graphics.setColor(Config.activeColors.text)
+            love.graphics.setColor(config.activeColors.text)
         elseif item.disabled then
             love.graphics.setColor(0.5, 0.5, 0.5, 1)
         else
-            love.graphics.setColor(Config.activeColors.text)
+            love.graphics.setColor(config.activeColors.text)
         end
         
         love.graphics.printf(displayText, x, currentY, width, "left")
@@ -424,13 +425,13 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
         local scrollbarHeight = maxVisibleItems * itemHeight
         
         -- Track with glow effect
-        love.graphics.setColor(Config.activeColors.accent[1], Config.activeColors.accent[2], 
-                              Config.activeColors.accent[3], 0.3)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], 0.3)
         UIHelpers.drawRoundedRect(scrollbarX, y, scrollbarWidth, scrollbarHeight, 3, "fill")
         
         -- Track border
-        love.graphics.setColor(Config.activeColors.accent[1], Config.activeColors.accent[2], 
-                              Config.activeColors.accent[3], 0.6)
+        love.graphics.setColor(config.activeColors.accent[1], config.activeColors.accent[2], 
+                              config.activeColors.accent[3], 0.6)
         UIHelpers.drawRoundedRect(scrollbarX, y, scrollbarWidth, scrollbarHeight, 3, "line")
         
         -- Animated thumb
@@ -443,9 +444,9 @@ function UIHelpers.drawSelectableList(items, selectedIndex, x, y, width, itemHei
         
         -- Thumb glow
         local thumbPulse = 0.8 + 0.2 * math.sin(animationTime * 4)
-        love.graphics.setColor(Config.activeColors.accent[1] * thumbPulse, 
-                              Config.activeColors.accent[2] * thumbPulse, 
-                              Config.activeColors.accent[3] * thumbPulse, 0.8)
+        love.graphics.setColor(config.activeColors.accent[1] * thumbPulse, 
+                              config.activeColors.accent[2] * thumbPulse, 
+                              config.activeColors.accent[3] * thumbPulse, 0.8)
         UIHelpers.drawRoundedRect(scrollbarX, thumbY, scrollbarWidth, thumbHeight, 3, "fill")
         
         -- Thumb highlight
@@ -456,13 +457,13 @@ end
 
 -- Simple loading spinner using ASCII characters
 function UIHelpers.drawLoadingSpinner(x, y, radius, color, animationTime)
-    color = color or Config.activeColors.accent
+    color = color or config.activeColors.accent
     animationTime = animationTime or love.timer.getTime()
     
     local chars = {"|", "/", "-", "\\"}
     local charIndex = math.floor(animationTime * 8) % #chars + 1
     
-    love.graphics.setFont(_G.Fonts.medium)
+    love.graphics.setFont(fonts.medium)
     love.graphics.setColor(color)
     love.graphics.print(chars[charIndex], x, y)
 end
@@ -471,7 +472,7 @@ end
 function UIHelpers.drawDataStream(x, y, width, height, speed, density, color)
     speed = speed or 50
     density = density or 0.1
-    color = color or Config.activeColors.accent
+    color = color or config.activeColors.accent
     
     local time = love.timer.getTime() * speed
     love.graphics.setColor(color[1], color[2], color[3], 0.6)
@@ -481,7 +482,7 @@ function UIHelpers.drawDataStream(x, y, width, height, speed, density, color)
         if love.math.random() < density then
             local chars = {"0", "1", "|", ".", ":", ";"}
             local char = chars[love.math.random(1, #chars)]
-            love.graphics.setFont(_G.Fonts.small)
+            love.graphics.setFont(fonts.small)
             love.graphics.print(char, x + i, streamY)
         end
     end

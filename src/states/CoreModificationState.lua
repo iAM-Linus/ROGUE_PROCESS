@@ -205,6 +205,7 @@ function CoreModificationState:update(dt)
 end
 
 function CoreModificationState:drawEnhancedBackground()
+    local fonts = ServiceLocator.get("fonts")
     local nativeW, nativeH = self.config.nativeResolution.width, self.config.nativeResolution.height
 
     -- Base background
@@ -236,7 +237,7 @@ function CoreModificationState:drawEnhancedBackground()
     end
 
     -- Background particles
-    love.graphics.setFont(_G.Fonts.small)
+    love.graphics.setFont(fonts.small)
     for _, particle in ipairs(self.backgroundParticles) do
         local alpha = particle.alpha * (particle.life / particle.maxLife)
         love.graphics.setColor(particle.color[1], particle.color[2], particle.color[3], alpha)
@@ -279,8 +280,8 @@ function CoreModificationState:draw()
 
     BaseState.draw(self)
 
-    local config = self.config or _G.Config
-    local fonts = self.resources and self.resources:getFonts() or _G.Fonts
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
     local nativeW, nativeH = config.nativeResolution.width, config.nativeResolution.height
 
     -- Enhanced animated background
@@ -378,6 +379,9 @@ function CoreModificationState:drawEnhancedSelectableList(items, selectedIndex, 
     scrollOffset = scrollOffset or 0
     maxVisibleItems = maxVisibleItems or #items
 
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
+
     -- Enhanced background for the list area
     local listBgColor = { self.config.activeColors.background[1], self.config.activeColors.background[2],
         self.config.activeColors.background[3], 0.6 }
@@ -417,11 +421,11 @@ function CoreModificationState:drawEnhancedSelectableList(items, selectedIndex, 
 
             -- Animated selection indicators
             love.graphics.setColor(highlightColor)
-            love.graphics.setFont(_G.Fonts.medium)
+            love.graphics.setFont(fonts.medium)
             local indicatorAlpha = 0.8 + 0.2 * math.sin(self.animationTime * 6)
             love.graphics.setColor(highlightColor[1], highlightColor[2], highlightColor[3], indicatorAlpha)
-            love.graphics.print(">>", x - 25, currentY + itemHeight / 2 - _G.Fonts.medium:getHeight() / 2)
-            love.graphics.print("<<", x + width + 8, currentY + itemHeight / 2 - _G.Fonts.medium:getHeight() / 2)
+            love.graphics.print(">>", x - 25, currentY + itemHeight / 2 - fonts.medium:getHeight() / 2)
+            love.graphics.print("<<", x + width + 8, currentY + itemHeight / 2 - fonts.medium:getHeight() / 2)
 
             -- Particle effects for selected item
             for j = 1, 4 do
@@ -457,7 +461,7 @@ function CoreModificationState:drawEnhancedSelectableList(items, selectedIndex, 
         end
 
         -- Multi-line text with enhanced formatting
-        love.graphics.setFont(_G.Fonts.small)
+        love.graphics.setFont(fonts.small)
 
         -- Text shadow for better readability
         if isSelected then
@@ -537,7 +541,7 @@ function CoreModificationState:keypressed(key)
         if self.selectedOption < self.scrollOffset + 1 then
             self.scrollOffset = math.max(0, self.selectedOption - 1)
         end
-        _G.SFX.play("ui_navigate")
+        ServiceLocator.get("sfx").play("ui_navigate")
         self:triggerSelectionEffect()
     elseif key == "down" then
         self.selectedOption = math.min(#self.availableMods, self.selectedOption + 1)
@@ -546,7 +550,7 @@ function CoreModificationState:keypressed(key)
                 .itemsPerPage)
             self.scrollOffset = math.max(0, self.scrollOffset)
         end
-        _G.SFX.play("ui_navigate")
+        ServiceLocator.get("sfx").play("ui_navigate")
         self:triggerSelectionEffect()
     elseif key == "return" or key == "kpenter" then
         local modDef = self.availableMods[self.selectedOption]
@@ -578,24 +582,17 @@ function CoreModificationState:keypressed(key)
                 end
             end
 
-            ---- Log message to gameplay if available
-            --local gameplay = _G.GameState and _G.GameState.get("gameplay") or nil
-            --if gameplay and gameplay.logMessage then
-            --    local config = self.config or _G.Config
-            --    gameplay:logMessage(message, success and config.activeColors.pickup or { 1, 0.5, 0.5, 1 })
-            --end
-
             if success then
-                _G.SFX.play("ui_select")
+                ServiceLocator.get("sfx").play("ui_select")
                 self:refreshAvailableMods()
                 self:triggerPurchaseEffect()
             else
-                _G.SFX.play("ui_error")
+                ServiceLocator.get("sfx").play("ui_error")
                 self:triggerErrorEffect()
             end
         end
     elseif key == "escape" then
-        _G.SFX.play("ui_back")
+        ServiceLocator.get("sfx").play("ui_back")
 
         -- Emit event
         if self.events then

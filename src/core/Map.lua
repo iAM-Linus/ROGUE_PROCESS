@@ -1,23 +1,24 @@
 -- src/core/Map.lua
 local Helpers = require "src.utils.helpers"
 
-local Tile = _G.Config.tile
+local Tile = ServiceLocator.get("config").tile
 
 local Map = {}
 Map.__index = Map
 
 function Map:new(width, height)
+    local config = ServiceLocator.get("config")
     local instance = setmetatable({}, Map)
-    instance.width = width or _G.Config.mapWidth
-    instance.height = height or _G.Config.mapHeight
+    instance.width = width or config.mapWidth
+    instance.height = height or config.mapHeight
     instance.tiles = {} -- 2D array: instance.tiles[y][x]
     instance.entities = {} -- List of all entities on the map (player, enemies, items)
     instance.playerSpawn = {x = 0, y = 0}
-    instance.exitPortal = {x = 0, y = 0, char = "X", color = _G.Config.activeColors.accent, active = true}
+    instance.exitPortal = {x = 0, y = 0, char = "X", color = config.activeColors.accent, active = true}
     instance.floorTiles = {} -- Keep track of floor tile coordinates
     instance.exploredTiles = {} -- exploredTiles[y .. "_" .. x] = true
  
-    local genMethod = _G.Config.mapGeneration.method or "random_walk"
+    local genMethod = config.mapGeneration.method or "random_walk"
     if genMethod == "cellular_automata" then
         instance:generateCellularAutomataMap()
     elseif genMethod == "random_walk" then
@@ -40,6 +41,8 @@ function Map:new(width, height)
 end
 
 function Map:initializeAnimatedTiles()
+    local config = ServiceLocator.get("config")
+
     -- Find water tiles and make them animated
     for y = 1, self.height do
         for x = 1, self.width do
@@ -69,8 +72,8 @@ function Map:initializeAnimatedTiles()
     -- Add some ambient particles
     for i = 1, 20 do
         table.insert(self.ambientParticles, {
-            x = love.math.random(1, self.width) * _G.Config.spriteSize,
-            y = love.math.random(1, self.height) * _G.Config.spriteSize,
+            x = love.math.random(1, self.width) * config.spriteSize,
+            y = love.math.random(1, self.height) * config.spriteSize,
             vx = love.math.random(-10, 10),
             vy = love.math.random(-15, -5),
             life = love.math.random(2, 6),
@@ -83,7 +86,8 @@ end
 
 -- --- Cellular Automata Generation ---
 function Map:generateCellularAutomataMap()
-    local caConf = _G.Config.mapGeneration.ca
+    local config = ServiceLocator.get("config")
+    local caConf = config.mapGeneration.ca
     local initialWallChance = caConf.initialWallChance
     local iterations = caConf.iterations
     local birthLimit = caConf.birthLimit
@@ -166,7 +170,7 @@ function Map:generateCellularAutomataMap()
     table.remove(self.floorTiles, spawnIndex)
 
     if #self.floorTiles == 0 then -- Edge case: only one floor tile
-        self.exitPortal = {x = self.playerSpawn.x, y = self.playerSpawn.y, char="X", color=_G.Config.activeColors.accent}
+        self.exitPortal = {x = self.playerSpawn.x, y = self.playerSpawn.y, char="X", color=config.activeColors.accent}
         print("Warning: Only one floor tile for player and exit.")
     else
         local exitIndex = love.math.random(1, #self.floorTiles)
@@ -174,7 +178,7 @@ function Map:generateCellularAutomataMap()
             x = self.floorTiles[exitIndex].x,
             y = self.floorTiles[exitIndex].y,
             char = "X",
-            color = _G.Config.activeColors.accent
+            color = config.activeColors.accent
         }
         table.remove(self.floorTiles, exitIndex)
     end
@@ -274,6 +278,8 @@ function Map:generateRandomWalkMap(targetFloorPercent, maxWalkers, stepsPerWalke
     maxWalkers = maxWalkers or 10 -- Number of distinct "walks"
     stepsPerWalker = stepsPerWalker or 200 -- Steps each walk takes
 
+    local config = ServiceLocator.get("config")
+
     local totalTiles = self.width * self.height
     local desiredFloorTiles = math.floor(totalTiles * targetFloorPercent)
     local currentFloorTiles = 0
@@ -359,7 +365,7 @@ function Map:generateRandomWalkMap(targetFloorPercent, maxWalkers, stepsPerWalke
         x = self.floorTiles[exitIndex].x,
         y = self.floorTiles[exitIndex].y,
         char = "X",
-        color = _G.Config.activeColors.accent
+        color = config.activeColors.accent
     }
     -- Optional: Ensure exit is far enough from player spawn
     local minExitDist = math.min(self.width, self.height) / 3
@@ -523,7 +529,7 @@ function Map:getAllEntities()
 end
 
 function Map:updateAnimations(dt)
-    local time = love.timer.getTime()
+    local config = ServiceLocator.get("config")
     
     -- Update discovery animations
     for i = #self.discoveryAnimations, 1, -1 do
@@ -546,17 +552,17 @@ function Map:updateAnimations(dt)
         particle.color[4] = (particle.life / particle.maxLife) * 0.3
         
         -- Wrap around screen
-        if particle.x < 0 then particle.x = self.width * _G.Config.spriteSize end
-        if particle.x > self.width * _G.Config.spriteSize then particle.x = 0 end
+        if particle.x < 0 then particle.x = self.width * config.spriteSize end
+        if particle.x > self.width * config.spriteSize then particle.x = 0 end
         if particle.y < 0 then 
-            particle.y = self.height * _G.Config.spriteSize
+            particle.y = self.height * config.spriteSize
             particle.life = particle.maxLife -- Reset life when wrapping
         end
         
         if particle.life <= 0 then
             -- Respawn particle
-            particle.x = love.math.random(1, self.width) * _G.Config.spriteSize
-            particle.y = self.height * _G.Config.spriteSize
+            particle.x = love.math.random(1, self.width) * config.spriteSize
+            particle.y = self.height * config.spriteSize
             particle.life = particle.maxLife
             particle.vx = love.math.random(-10, 10)
             particle.vy = love.math.random(-15, -5)
@@ -619,7 +625,8 @@ function Map:addCorruptionEffects(corruptionLevel)
 end
 
 function Map:draw(offsetX, offsetY, tileSize)
-    love.graphics.setFont(_G.Fonts.large) -- Or a specific map font
+    local fonts = ServiceLocator.get("fonts")
+    love.graphics.setFont(fonts.large) -- Or a specific map font
 
     for y = 1, self.height do
         for x = 1, self.width do
@@ -628,12 +635,12 @@ function Map:draw(offsetX, offsetY, tileSize)
             local screenY = offsetY + (y - 1) * tileSize
 
             love.graphics.setColor(tile.color)
-            love.graphics.print(tile.char, screenX + tileSize / 2 - (_G.Fonts.medium:getWidth(tile.char) / 2) , screenY + tileSize / 2 - (_G.Fonts.medium:getHeight() / 2))
+            love.graphics.print(tile.char, screenX + tileSize / 2 - (fonts.medium:getWidth(tile.char) / 2) , screenY + tileSize / 2 - (fonts.medium:getHeight() / 2))
 
             -- Draw exit portal
             if x == self.exitPortal.x and y == self.exitPortal.y then
                 love.graphics.setColor(self.exitPortal.color)
-                love.graphics.print(self.exitPortal.char, screenX + tileSize / 2 - (_G.Fonts.medium:getWidth(self.exitPortal.char) / 2), screenY + tileSize / 2 - (_G.Fonts.medium:getHeight() / 2))
+                love.graphics.print(self.exitPortal.char, screenX + tileSize / 2 - (fonts.medium:getWidth(self.exitPortal.char) / 2), screenY + tileSize / 2 - (fonts.medium:getHeight() / 2))
             end
         end
     end
@@ -747,6 +754,9 @@ function Map:isInFov(x, y)
 end
 
 function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fovRadius)
+    local config = ServiceLocator.get("config")
+    local fonts = ServiceLocator.get("fonts")
+    
     if not self.visibleTiles then self:computeFov(playerX, playerY, fovRadius) end
     
     self:updateAnimations(love.timer.getDelta())
@@ -756,7 +766,7 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
     -- Draw ambient particles first (background layer)
     for _, particle in ipairs(self.ambientParticles) do
         if particle.color[4] > 0 then
-            love.graphics.setFont(_G.Fonts.small)
+            love.graphics.setFont(fonts.small)
             love.graphics.setColor(particle.color)
             love.graphics.print(particle.char, offsetX + particle.x, offsetY + particle.y)
         end
@@ -800,7 +810,7 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
                 end
 
                 if tileDataDef.quadName then 
-                    quadData = SpriteManager.getQuadData(tileDataDef.quadName) 
+                    quadData = ServiceLocator.get("sprites").getQuadData(tileDataDef.quadName) 
                 end
                 
                 if quadData and quadData.quad and quadData.image then
@@ -826,9 +836,9 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
                     love.graphics.translate(tileScreenX + visualTileSize/2, tileScreenY + visualTileSize/2)
                     love.graphics.scale(discovery.scale, discovery.scale)
                     
-                    love.graphics.setColor(_G.Config.activeColors.accent[1], 
-                                          _G.Config.activeColors.accent[2], 
-                                          _G.Config.activeColors.accent[3], 
+                    love.graphics.setColor(config.activeColors.accent[1], 
+                                          config.activeColors.accent[2], 
+                                          config.activeColors.accent[3], 
                                           discovery.alpha * 0.6)
                     love.graphics.circle("line", 0, 0, visualTileSize/3)
                     
@@ -842,12 +852,12 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
                     local glitchChar = glitch.chars[math.floor(glitch.elapsed * 10) % #glitch.chars + 1]
                     local glitchColor = glitch.colors[math.floor(glitch.elapsed * 5) % #glitch.colors + 1]
                     
-                    love.graphics.setFont(_G.Fonts.medium)
+                    love.graphics.setFont(fonts.medium)
                     love.graphics.setColor(glitchColor[1], glitchColor[2], glitchColor[3], 
                                           glitchColor[4] * glitch.intensity)
                     love.graphics.print(glitchChar,
-                                       tileScreenX + visualTileSize/2 - _G.Fonts.medium:getWidth(glitchChar)/2, 
-                                       tileScreenY + visualTileSize/2 - _G.Fonts.medium:getHeight()/2)
+                                       tileScreenX + visualTileSize/2 - fonts.medium:getWidth(glitchChar)/2, 
+                                       tileScreenY + visualTileSize/2 - fonts.medium:getHeight()/2)
                 end
             end
 
@@ -863,22 +873,22 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
                     love.graphics.rotate(portalRotation)
                     
                     -- Portal glow effect
-                    love.graphics.setColor(_G.Config.activeColors.accent[1], 
-                                          _G.Config.activeColors.accent[2], 
-                                          _G.Config.activeColors.accent[3], 0.3)
+                    love.graphics.setColor(config.activeColors.accent[1], 
+                                          config.activeColors.accent[2], 
+                                          config.activeColors.accent[3], 0.3)
                     love.graphics.circle("fill", 0, 0, visualTileSize/2)
                     
                     -- Portal sprite or character
-                    local exitQuadData = SpriteManager.getQuadData("EXIT_PORTAL_SPRITE")
+                    local exitQuadData = ServiceLocator.get("sprites").getQuadData("EXIT_PORTAL_SPRITE")
                     if exitQuadData and exitQuadData.image and exitQuadData.quad then
-                        love.graphics.setColor(self:isInFov(x_map,y_map) and _G.Config.activeColors.accent or {0.5,0.5,0.5,1})
+                        love.graphics.setColor(self:isInFov(x_map,y_map) and config.activeColors.accent or {0.5,0.5,0.5,1})
                         love.graphics.draw(exitQuadData.image, exitQuadData.quad, 
                                           -visualTileSize/2, -visualTileSize/2, 0,
                                           visualTileSize / exitQuadData.spriteWidth,
                                           visualTileSize / exitQuadData.spriteHeight)
                     else
-                        love.graphics.setColor(_G.Config.activeColors.accent)
-                        love.graphics.print("◎", -_G.Fonts.medium:getWidth("◎")/2, -_G.Fonts.medium:getHeight()/2)
+                        love.graphics.setColor(config.activeColors.accent)
+                        love.graphics.print("◎", -fonts.medium:getWidth("◎")/2, -fonts.medium:getHeight()/2)
                     end
                     
                     love.graphics.pop()
@@ -890,9 +900,9 @@ function Map:drawWithFov(offsetX, offsetY, visualTileSize, playerX, playerY, fov
                         local particleX = tileScreenX + visualTileSize/2 + math.cos(particleAngle) * particleRadius
                         local particleY = tileScreenY + visualTileSize/2 + math.sin(particleAngle) * particleRadius
                         
-                        love.graphics.setColor(_G.Config.activeColors.accent[1], 
-                                              _G.Config.activeColors.accent[2], 
-                                              _G.Config.activeColors.accent[3], 0.8)
+                        love.graphics.setColor(config.activeColors.accent[1], 
+                                              config.activeColors.accent[2], 
+                                              config.activeColors.accent[3], 0.8)
                         love.graphics.circle("fill", particleX, particleY, 2)
                     end
                 end
